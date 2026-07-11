@@ -98,6 +98,14 @@ local publicLibraryPaths = {
 	['libraries/string.lua'] = true,
 	['libraries/vm.lua'] = true,
 }
+local seedProfilePaths = {
+	['profiles/2619619496.gui.txt'] = true,
+	['profiles/blatant6872265039.txt'] = true,
+	['profiles/blatant6872274481.txt'] = true,
+	['profiles/default6872265039.txt'] = true,
+	['profiles/default6872274481.txt'] = true,
+	['profiles/gui.txt'] = true,
+}
 
 local function isPublicPath(path)
 	if type(path) ~= 'string'
@@ -126,6 +134,9 @@ local function isPublicPath(path)
 		return true
 	end
 	if publicGamePaths[path] then
+		return true
+	end
+	if seedProfilePaths[path] then
 		return true
 	end
 	if publicLibraryPaths[path] then
@@ -298,11 +309,12 @@ if manifest then
 	for _, entry in ipairs(manifest.files) do
 		local localPath = folder..'/'..entry.path
 		local needsDownload = not safeIsFile(localPath)
-		if not needsDownload then
+		local seedProfile = seedProfilePaths[entry.path] == true
+		if not needsDownload and not seedProfile then
 			local ok, cached = pcall(readfile, localPath)
 			needsDownload = not ok or not contentMatches(entry, cached)
 		end
-		if not needsDownload and revisionChanged then
+		if not needsDownload and revisionChanged and not seedProfile then
 			local previous = previousIndex[entry.path]
 			needsDownload = not hasPreviousIndex
 				or not previous

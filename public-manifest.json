@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-290a73f81a4e4e120f1d9251c2b6b8ccb1932219be00f5292d85f97e5228d0d5",
+  "revision": "sha256-1f18feb6a5485df59bfbecd17b4e3ba5659ff43b72563687cbb37770122e0665",
   "files": [
     {
       "path": "assets/new/add.png",
@@ -539,8 +539,8 @@
     },
     {
       "path": "init.lua",
-      "bytes": 10820,
-      "sha256": "90c07ae378de181d616efaa3d73dfd61f8c19a09a5f26792a5fdcb4412853fe7"
+      "bytes": 11246,
+      "sha256": "5e2e2dab367f9b67f00e53e5b9bfe75bfbfe517d332217585ab153cc5ffbc1c5"
     },
     {
       "path": "libraries/badvape-theme.lua",
@@ -603,9 +603,39 @@
       "sha256": "e3f91f0a8d79a324a7c263ea5804ffc6c5c11aa79ab1f75547294cfa5c89f808"
     },
     {
+      "path": "profiles/2619619496.gui.txt",
+      "bytes": 1479,
+      "sha256": "17d4b8720986373f88662625e6a96e95d2eb00d38c38a07205921b704be464ea"
+    },
+    {
+      "path": "profiles/blatant6872265039.txt",
+      "bytes": 15355,
+      "sha256": "23bc2466963105b263d5b2636c15ddacf48304f3b5f2f60de5d4e212ff78d4d4"
+    },
+    {
+      "path": "profiles/blatant6872274481.txt",
+      "bytes": 40602,
+      "sha256": "a408e9f82ca8a24cb070b9cfa0e3176c05efefaf1c519bc7348343b616eff96b"
+    },
+    {
+      "path": "profiles/default6872265039.txt",
+      "bytes": 15349,
+      "sha256": "e8e622ae97e5786877544f3798907a11fbb6fd0d62e10babb04476661a6b642f"
+    },
+    {
+      "path": "profiles/default6872274481.txt",
+      "bytes": 40407,
+      "sha256": "a8d7f4f2af70fdd0de965e5dce2841a62f8fd2cbe79a6a94053d88bf62bf5f34"
+    },
+    {
       "path": "profiles/features.json",
       "bytes": 3,
       "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "profiles/gui.txt",
+      "bytes": 3,
+      "sha256": "11507a0e2f5e69d5dfa40a62a1bd7b6ee57e6bcd85c67c9b8431b36fff21c437"
     },
     {
       "path": "profiles/packages.json",
