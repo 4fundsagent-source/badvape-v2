@@ -11,6 +11,7 @@ local folder = shared.BadVapeFolder or 'badvape'
 local revisionPath = folder..'/cache/public-revision.txt'
 local fileIndexPath = folder..'/cache/public-file-index.txt'
 local profileSeedPath = folder..'/cache/profile-seed-v1.txt'
+local releaseRefPath = folder..'/cache/public-release-ref.txt'
 
 shared.BadVapeFolder = folder
 
@@ -63,20 +64,46 @@ if shared.VapeDeveloper == true then
 	shared.VapeDeveloper = nil
 end
 
-local releaseRef = branch
-local refOk, refBody = pcall(game.HttpGet, game,
-	'https://api.github.com/repos/'..owner..'/'..repo..'/commits/'..branch, true)
-if refOk and type(refBody) == 'string' then
-	local decodeOk, refData = pcall(httpService.JSONDecode, httpService, refBody)
-	if decodeOk and type(refData) == 'table'
-		and type(refData.sha) == 'string'
-		and refData.sha:match('^[0-9a-f]+$')
-		and #refData.sha == 40 then
-		releaseRef = refData.sha
+local releaseRef
+for attempt = 1, 3 do
+	local refOk, refBody = pcall(game.HttpGet, game,
+		'https://api.github.com/repos/'..owner..'/'..repo..'/commits/'..branch, true)
+	if refOk and type(refBody) == 'string' then
+		local decodeOk, refData = pcall(httpService.JSONDecode, httpService, refBody)
+		if decodeOk and type(refData) == 'table'
+			and type(refData.sha) == 'string'
+			and refData.sha:match('^[0-9a-f]+$')
+			and #refData.sha == 40 then
+			releaseRef = refData.sha
+			break
+		end
+	end
+	if attempt < 3 and type(task) == 'table' and type(task.wait) == 'function' then
+		task.wait(0.25 * attempt)
 	end
 end
-local baseUrl = 'https://raw.githubusercontent.com/'..owner..'/'..repo..'/'..releaseRef..'/'
-local manifestUrl = baseUrl..'public-manifest.json'
+if not releaseRef and safeIsFile(releaseRefPath) then
+	local ok, cachedRef = pcall(readfile, releaseRefPath)
+	if ok and type(cachedRef) == 'string'
+		and cachedRef:match('^[0-9a-f]+$') and #cachedRef == 40 then
+		releaseRef = cachedRef
+	end
+end
+if not releaseRef then
+	if safeIsFile(folder..'/os.luau') then
+		warn('BadVape release lookup failed; using the cached public runtime.')
+		return runCachedRuntime()
+	end
+	-- GitHub's unauthenticated commit API can be rate-limited even while raw
+	-- content remains healthy. Fresh installs may use the branch as a last
+	-- resort; the manifest and per-file validation still fail atomically if a
+	-- branch update is observed halfway through the download.
+	releaseRef = branch
+end
+local baseUrls = {
+	'https://raw.githubusercontent.com/'..owner..'/'..repo..'/'..releaseRef..'/',
+	'https://cdn.jsdelivr.net/gh/'..owner..'/'..repo..'@'..releaseRef..'/',
+}
 
 local publicGamePaths = {
 	['games/11156779721.lua'] = true,
@@ -208,6 +235,21 @@ local function fetch(url)
 	return body
 end
 
+local function fetchPath(path, validator)
+	for attempt = 1, 4 do
+		for _, baseUrl in ipairs(baseUrls) do
+			local contents = fetch(baseUrl..path)
+			if contents and (not validator or validator(contents)) then
+				return contents
+			end
+		end
+		if attempt < 4 and type(task) == 'table' and type(task.wait) == 'function' then
+			task.wait(0.25 * attempt)
+		end
+	end
+	return nil
+end
+
 local sha256Calibration = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
 local function validDigest(value)
 	return type(value) == 'string' and #value == 64 and value:match('^[0-9a-fA-F]+$') ~= nil
@@ -307,7 +349,7 @@ ensureFolder(folder)
 ensureFolder(folder..'/cache')
 ensureFolder(folder..'/profiles')
 
-local manifestBody = fetch(manifestUrl)
+local manifestBody = fetchPath('public-manifest.json')
 local manifest
 if manifestBody then
 	local ok, decoded = pcall(httpService.JSONDecode, httpService, manifestBody)
@@ -344,17 +386,9 @@ if manifest then
 	local downloaded = {}
 	local function fetchPending(index)
 		local pendingFile = pending[index]
-		for attempt = 1, 4 do
-			local contents = fetch(baseUrl..pendingFile.entry.path)
-			if contentMatches(pendingFile.entry, contents) then
-				downloaded[index] = contents
-				return
-			end
-			if attempt < 4 and type(task) == 'table' and type(task.wait) == 'function' then
-				task.wait(0.2 * attempt)
-			end
-		end
-		downloaded[index] = false
+		downloaded[index] = fetchPath(pendingFile.entry.path, function(contents)
+			return contentMatches(pendingFile.entry, contents)
+		end) or false
 	end
 
 	if #pending > 1
@@ -398,6 +432,9 @@ if manifest then
 	end
 	writefile(fileIndexPath, encodeFileIndex(manifest))
 	writefile(revisionPath, manifest.revision)
+	if releaseRef:match('^[0-9a-f]+$') and #releaseRef == 40 then
+		writefile(releaseRefPath, releaseRef)
+	end
 	writefile(profileSeedPath, manifest.revision)
 	-- Fallback downloads use this branch; user profile/config files remain untouched.
 	writefile(folder..'/profiles/commit.txt', branch)
