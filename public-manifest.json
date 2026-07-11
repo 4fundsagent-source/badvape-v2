@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-404475105bb6d88512ad43f52076ac1aa67161f12b20a07beca1b9882f0faa34",
+  "revision": "sha256-a644202e80aebb55102f1d4c68277a0fbf3a03bc2f6e0c929e7de8100d795e6d",
   "files": [
     {
       "path": "assets/new/add.png",
@@ -604,8 +604,8 @@
     },
     {
       "path": "profiles/2619619496.gui.txt",
-      "bytes": 1479,
-      "sha256": "17d4b8720986373f88662625e6a96e95d2eb00d38c38a07205921b704be464ea"
+      "bytes": 1439,
+      "sha256": "624d7a571b57ee22aafd957bd1966e9404cfbf9e8153423936d85a48ad08c5ed"
     },
     {
       "path": "profiles/blatant6872265039.txt",
@@ -614,8 +614,8 @@
     },
     {
       "path": "profiles/blatant6872274481.txt",
-      "bytes": 40602,
-      "sha256": "a408e9f82ca8a24cb070b9cfa0e3176c05efefaf1c519bc7348343b616eff96b"
+      "bytes": 40547,
+      "sha256": "99e118fddc2855e0e7ece6184b5e1a0f236a43034367493ca2ede60185f467f4"
     },
     {
       "path": "profiles/default6872265039.txt",
@@ -624,8 +624,8 @@
     },
     {
       "path": "profiles/default6872274481.txt",
-      "bytes": 40407,
-      "sha256": "a8d7f4f2af70fdd0de965e5dce2841a62f8fd2cbe79a6a94053d88bf62bf5f34"
+      "bytes": 40470,
+      "sha256": "3d98107195354cc4bc7e3bdf4ed681547a5e833cd576828528e25aa2d6c558e8"
     },
     {
       "path": "profiles/features.json",
