@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-7f6a36a5760ecfe20fa58f56697d8c837c1f617353f43bf10b214c943f064df3",
+  "revision": "sha256-dba854afc47553b164e1622b01dd23dbbf0b57be81a2964a725233c5d59255c1",
   "files": [
     {
       "path": "assets/new/add.png",
@@ -539,8 +539,8 @@
     },
     {
       "path": "init.lua",
-      "bytes": 11402,
-      "sha256": "f7295337fc32b5b19b32776b651cc7a723c2f7f5aa776e231dec54ee9f347f2d"
+      "bytes": 11506,
+      "sha256": "86750a2a85297106999be8e6eb2662e185ebaeeabdede06c98575537d3c377af"
     },
     {
       "path": "libraries/badvape-theme.lua",
@@ -594,8 +594,8 @@
     },
     {
       "path": "main.lua",
-      "bytes": 8401,
-      "sha256": "d214cf48c05e2c839cca4428a36aeebdc64acc8be00346b29822d366493f786b"
+      "bytes": 8290,
+      "sha256": "83bf4ef890a65ce31bc6b48e75dafd7cb1a4d3366a44ab6a13780242fd93b51f"
     },
     {
       "path": "os.luau",

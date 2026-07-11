@@ -50,7 +50,7 @@ local function runCachedRuntime()
 	return osChunk(forwardedLicense)
 end
 
-local localWorkspace = shared.VapeDeveloper == true
+local localWorkspace = shared.VapeDeveloper == true and safeIsFile(folder..'/os.luau')
 if not localWorkspace and safeIsFile(folder..'/profiles/commit.txt') then
 	local markerOk, marker = pcall(readfile, folder..'/profiles/commit.txt')
 	localWorkspace = markerOk
@@ -59,6 +59,9 @@ if not localWorkspace and safeIsFile(folder..'/profiles/commit.txt') then
 end
 if localWorkspace then
 	return runCachedRuntime()
+end
+if shared.VapeDeveloper == true then
+	shared.VapeDeveloper = nil
 end
 
 local publicGamePaths = {

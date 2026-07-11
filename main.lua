@@ -138,9 +138,6 @@ local function finishLoading()
 				local teleportScript = 'shared.vapereload = true\n'
 					..'shared.BadVapeFolder = '..httpService:JSONEncode(runtimeFolder)..'\n'
 					..'loadstring(game:HttpGet('..loaderUrl..'))() { log { '..encodedUid..' } }'
-				if shared.VapeDeveloper then
-					teleportScript = 'shared.VapeDeveloper = true\n'..teleportScript
-				end
 				if shared.VapeCustomProfile then
 					teleportScript = 'shared.VapeCustomProfile = '
 						..httpService:JSONEncode(tostring(shared.VapeCustomProfile))..'\n'..teleportScript
