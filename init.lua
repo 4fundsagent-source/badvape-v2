@@ -24,6 +24,7 @@ local baseUrl = 'https://raw.githubusercontent.com/'..owner..'/'..repo..'/'..rel
 local manifestUrl = baseUrl..'public-manifest.json'
 local revisionPath = folder..'/cache/public-revision.txt'
 local fileIndexPath = folder..'/cache/public-file-index.txt'
+local profileSeedPath = folder..'/cache/profile-seed-v1.txt'
 
 shared.BadVapeFolder = folder
 
@@ -320,11 +321,12 @@ end
 if manifest then
 	local previousIndex, hasPreviousIndex = readCachedFileIndex()
 	local revisionChanged = readCachedRevision() ~= manifest.revision
+	local profileSeeded = safeIsFile(profileSeedPath)
 	local pending = {}
 	for _, entry in ipairs(manifest.files) do
 		local localPath = folder..'/'..entry.path
 		local seedProfile = seedProfilePaths[entry.path] == true
-		local needsDownload = not safeIsFile(localPath)
+		local needsDownload = not safeIsFile(localPath) or (seedProfile and not profileSeeded)
 		if not needsDownload and not seedProfile then
 			local ok, cached = pcall(readfile, localPath)
 			needsDownload = not ok or not contentMatches(entry, cached)
@@ -398,6 +400,7 @@ if manifest then
 	end
 	writefile(fileIndexPath, encodeFileIndex(manifest))
 	writefile(revisionPath, manifest.revision)
+	writefile(profileSeedPath, manifest.revision)
 	-- Fallback downloads use this branch; user profile/config files remain untouched.
 	writefile(folder..'/profiles/commit.txt', branch)
 elseif not safeIsFile(folder..'/os.luau') then
