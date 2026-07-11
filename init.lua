@@ -329,12 +329,17 @@ if manifest then
 	local downloaded = {}
 	local function fetchPending(index)
 		local pendingFile = pending[index]
-		local contents = fetch(baseUrl..pendingFile.entry.path)
-		if contentMatches(pendingFile.entry, contents) then
-			downloaded[index] = contents
-		else
-			downloaded[index] = false
+		for attempt = 1, 4 do
+			local contents = fetch(baseUrl..pendingFile.entry.path)
+			if contentMatches(pendingFile.entry, contents) then
+				downloaded[index] = contents
+				return
+			end
+			if attempt < 4 and type(task) == 'table' and type(task.wait) == 'function' then
+				task.wait(0.2 * attempt)
+			end
 		end
+		downloaded[index] = false
 	end
 
 	if #pending > 1
@@ -342,7 +347,7 @@ if manifest then
 		and type(task.spawn) == 'function'
 		and type(task.wait) == 'function' then
 		local nextIndex = 1
-		local workers = math.min(6, #pending)
+		local workers = math.min(3, #pending)
 		local finishedWorkers = 0
 		for _ = 1, workers do
 			task.spawn(function()
