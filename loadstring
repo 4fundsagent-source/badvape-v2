@@ -1,0 +1,5 @@
+local chunk, loadError = loadstring(game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape/main/init.lua'), 'init.lua')
+if type(chunk) ~= 'function' then
+	error(loadError or 'BadVape installer rejected', 0)
+end
+return chunk(...)

@@ -1,0 +1,14 @@
+# Private source is never published. The reviewed encrypted protected artifact
+# is included in the public release repository and manifest.
+games/6872274481.lua
+
+# Runtime/customer state is never part of the public repository.
+cache/
+simpleauth/
+profiles/*
+!profiles/features.json
+!profiles/packages.json
+
+# Retired UI leftovers from older workspaces.
+guis/rise.lua
+assets/rise/

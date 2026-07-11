@@ -1,0 +1,621 @@
+{
+  "schemaVersion": 1,
+  "revision": "sha256-290a73f81a4e4e120f1d9251c2b6b8ccb1932219be00f5292d85f97e5228d0d5",
+  "files": [
+    {
+      "path": "assets/new/add.png",
+      "bytes": 373,
+      "sha256": "c27c704d230d506fb880fac4d42945bdd761ff5faf63b7b10031c2df23b27200"
+    },
+    {
+      "path": "assets/new/alert.png",
+      "bytes": 3992,
+      "sha256": "6e2771b285140189af96bb763bfa8c69ce6354fb0c5b0f0aa375da8ed825d598"
+    },
+    {
+      "path": "assets/new/allowedicon.png",
+      "bytes": 353,
+      "sha256": "090bebafebb2b4576e6993296ddf8e2440e9ec6c676714412921cfa0cdb6c8c8"
+    },
+    {
+      "path": "assets/new/allowedtab.png",
+      "bytes": 446,
+      "sha256": "a195c4e864068fe951aa8dfc5b5ac33dbcee9e283e1dfca9b2af518e22cb91f3"
+    },
+    {
+      "path": "assets/new/arrowmodule.png",
+      "bytes": 1123,
+      "sha256": "36e54cce46f99f1d830a9bd1b5b9c431ae0d5a2b18b4337d2bd78f12a0e08b6a"
+    },
+    {
+      "path": "assets/new/back.png",
+      "bytes": 263,
+      "sha256": "7fab66001b76c953f87899eaf72830b35a35c9be928dbc7ed34b4b1139b8d8a0"
+    },
+    {
+      "path": "assets/new/bind.png",
+      "bytes": 237,
+      "sha256": "64287da0568924aadaa7abc88fa52e4344ff30045d18788cfaed5aacd8558a5f"
+    },
+    {
+      "path": "assets/new/bindbkg.png",
+      "bytes": 295,
+      "sha256": "92e0188077167fb9874bd463f1e17a95b83ce2a40847efd997e22f3cb88b53e0"
+    },
+    {
+      "path": "assets/new/blatanticon.png",
+      "bytes": 330,
+      "sha256": "c85459ff3c3f5496a3fb49cd97eae926d832f773b116af571090446313221e56"
+    },
+    {
+      "path": "assets/new/blockedicon.png",
+      "bytes": 341,
+      "sha256": "7f539a26af4d1a7a0abfe41971a0509283936508ab22ac64a30a94decbe41821"
+    },
+    {
+      "path": "assets/new/blockedtab.png",
+      "bytes": 466,
+      "sha256": "9a5455cefa5e37775b6b51ae9fc6f8bfa18b0b7aa455ba9533e6ae751d2cf9b8"
+    },
+    {
+      "path": "assets/new/blur.png",
+      "bytes": 1942,
+      "sha256": "35f34c08ea82b8428eda0f6d9b3258764dd19359f1878cc767c2242e0703b6cb"
+    },
+    {
+      "path": "assets/new/blurnotif.png",
+      "bytes": 1946,
+      "sha256": "67388dfa3e79ba546331c3d4e55572f98fe25fb81d6213905731079753dfb7b3"
+    },
+    {
+      "path": "assets/new/close.png",
+      "bytes": 198,
+      "sha256": "68d8ee22fb3beb7641b308d39f0c980cf671b7fc1260a3e32c4f9c8323b7f591"
+    },
+    {
+      "path": "assets/new/closemini.png",
+      "bytes": 137,
+      "sha256": "462f5a1af9f5edd10394e2f7c8dede660ff83be9908e7bfeb8ee76a7be37a257"
+    },
+    {
+      "path": "assets/new/colorpreview.png",
+      "bytes": 212,
+      "sha256": "ed260113a2e3c354735f7bfef0fb740f5f867d1bd2afc104021509171c8d2a47"
+    },
+    {
+      "path": "assets/new/combaticon.png",
+      "bytes": 303,
+      "sha256": "1b592d1d9a09f935ab849b5fe6f10dfb55a1c3e1742b0598e98788bc41b09dcb"
+    },
+    {
+      "path": "assets/new/customsettings.png",
+      "bytes": 334,
+      "sha256": "1bd87297f0262d177b312863716df58afada6d080f6e17dc63cb8c81e34296f3"
+    },
+    {
+      "path": "assets/new/discord.png",
+      "bytes": 644,
+      "sha256": "6159ad9acc47d927dee46b3694852eccee679cde7487ee34861866c65dd089ec"
+    },
+    {
+      "path": "assets/new/dots.png",
+      "bytes": 147,
+      "sha256": "ee877658af5c8c6de2b330bba14c7105b7eed67666e089e5c21461cd42cb7dc8"
+    },
+    {
+      "path": "assets/new/edit.png",
+      "bytes": 194,
+      "sha256": "1e70d1d9cadd79aba9c1d943c5ccb0e763d8e6d0e06a622ced0aff1c5ba44dc4"
+    },
+    {
+      "path": "assets/new/expandicon.png",
+      "bytes": 154,
+      "sha256": "5cd9c3aeb2ff3c80dc48484b319a06fcad0781bc0579577eeaa29e0f876ad4c8"
+    },
+    {
+      "path": "assets/new/expandright.png",
+      "bytes": 127,
+      "sha256": "71836e04b50978b79ee387afa8def8114672dc2e130c78763e893684d648b675"
+    },
+    {
+      "path": "assets/new/expandup.png",
+      "bytes": 133,
+      "sha256": "2bb3505c34df1f3ba192ed874b3f865a1d05905ece2298a5d2401d368e310358"
+    },
+    {
+      "path": "assets/new/friendstab.png",
+      "bytes": 378,
+      "sha256": "d36816018ca38db02145110919e0de54744320d7ef9b267ffd82ee8b59d0e6d9"
+    },
+    {
+      "path": "assets/new/guisettings.png",
+      "bytes": 249,
+      "sha256": "223eb67ba2d3b724eaeb35ef4ec9247a9541b07e9b6ef461e47e6c4139032469"
+    },
+    {
+      "path": "assets/new/guislider.png",
+      "bytes": 402,
+      "sha256": "0cdb41f938811458ee142c6fd14a163c8df97a7f355d2333d42289dd7931629a"
+    },
+    {
+      "path": "assets/new/guisliderrain.png",
+      "bytes": 443,
+      "sha256": "4336413ba3af63917f06e9712e069ff27d389fbf1d19e190e627bcac09c2b94d"
+    },
+    {
+      "path": "assets/new/guiv4.png",
+      "bytes": 704,
+      "sha256": "4b1c5ec403c3a108f4aac45a353175dbd026835f48780be22c84d09a06704100"
+    },
+    {
+      "path": "assets/new/guivape.png",
+      "bytes": 1276,
+      "sha256": "b429e1e1e198eb6897eb5622029373fb97b2c3c6be56984fddf7d977ac2ff581"
+    },
+    {
+      "path": "assets/new/info.png",
+      "bytes": 1912,
+      "sha256": "cc192f48f53642fb519dfcf2f5dfed0c4de13b440c6fb1b25f3b1da57518017e"
+    },
+    {
+      "path": "assets/new/inventoryicon.png",
+      "bytes": 263,
+      "sha256": "e8549371f4f9d7913fa08e3ec6e9cf502f68a9f34c8502dd76b39427ab76d8ea"
+    },
+    {
+      "path": "assets/new/legit.png",
+      "bytes": 412,
+      "sha256": "0d65087cfe212a78191e9d3dc390d33443f52348b1e8a9d306fbb532a841b8e8"
+    },
+    {
+      "path": "assets/new/legittab.png",
+      "bytes": 275,
+      "sha256": "be9f18493e33e77f4ced25cbd59ff5a093d4f6920b46e5ea8f496b9fa67cd7d8"
+    },
+    {
+      "path": "assets/new/miniicon.png",
+      "bytes": 407,
+      "sha256": "35ba98b70852e9f33d1c6160df93574f0bcfeed072ceed8bc785523afc834452"
+    },
+    {
+      "path": "assets/new/notification.png",
+      "bytes": 196,
+      "sha256": "8a9f7099556db950302af949fbbe0662ccd1e8c0741d1025e9dcae4825b22bf0"
+    },
+    {
+      "path": "assets/new/overlaysicon.png",
+      "bytes": 188,
+      "sha256": "0934b84c45a93d90a597aa03b00874b8c6d1b58fc2c10d96b13aabd6254d1af3"
+    },
+    {
+      "path": "assets/new/overlaystab.png",
+      "bytes": 191,
+      "sha256": "7cf24b041f1aff83891049974cfab2d6db0195cd561522738e771a280c2fa5e1"
+    },
+    {
+      "path": "assets/new/pin.png",
+      "bytes": 267,
+      "sha256": "ad478c4587b6e8fe500f504094d9507ec3604798cf4c07d46915ce11a0e11ec6"
+    },
+    {
+      "path": "assets/new/profilesicon.png",
+      "bytes": 148,
+      "sha256": "19898a68596e25890143d60f7cece320be138aaa80daecd6b0add2c7540ad94e"
+    },
+    {
+      "path": "assets/new/radaricon.png",
+      "bytes": 342,
+      "sha256": "765843199ba9476cd945561ee38adc8c739c9c8559c3bfb1759372d62c1384b1"
+    },
+    {
+      "path": "assets/new/rainbow_1.png",
+      "bytes": 115,
+      "sha256": "1ce0da9200f2f020c319a6633b7e114e92c88141d7ce3b5edfb0e1c749a39ee1"
+    },
+    {
+      "path": "assets/new/rainbow_2.png",
+      "bytes": 139,
+      "sha256": "9da8907b12ed9c97da98f0689830bd584bddbd05b17e198610e3437b8377eb9d"
+    },
+    {
+      "path": "assets/new/rainbow_3.png",
+      "bytes": 185,
+      "sha256": "1459c22d9c3ccb32add9c1b0233e2118eaabe476c7407c54bfd581f976f27d0a"
+    },
+    {
+      "path": "assets/new/rainbow_4.png",
+      "bytes": 198,
+      "sha256": "6b7aa9d671805691599fc84dca2b05588462880049a6e3cd9900ee9dc06df472"
+    },
+    {
+      "path": "assets/new/range.png",
+      "bytes": 198,
+      "sha256": "98ee755fccf14156cc19f9db67d8ff10316f4467afb9cdacbfea250a531d8666"
+    },
+    {
+      "path": "assets/new/rangearrow.png",
+      "bytes": 162,
+      "sha256": "4535ccab033a0ef58ed5e378bb236fb91d982e97ad80ea0d44f71f1074fb989c"
+    },
+    {
+      "path": "assets/new/rendericon.png",
+      "bytes": 287,
+      "sha256": "32c3080ecc138ed1f5207ea3e6e2baa4f516c6bd04a56cbf3060c9d3326b0de7"
+    },
+    {
+      "path": "assets/new/rendertab.png",
+      "bytes": 344,
+      "sha256": "f017cebfc2bfba183bcbf80963ad3f574b3d09efce4758ce1f47407d94bc70ee"
+    },
+    {
+      "path": "assets/new/search.png",
+      "bytes": 278,
+      "sha256": "d3f276e86d48607880e760cd09c073418d71c442e38ca6991995286e6c919b21"
+    },
+    {
+      "path": "assets/new/targetinfoicon.png",
+      "bytes": 255,
+      "sha256": "3829121f18917848900dc52dfc40ac590f728626f103c4c3b1ad526cccca0746"
+    },
+    {
+      "path": "assets/new/targetnpc1.png",
+      "bytes": 312,
+      "sha256": "b2c363c51898b16984457b6126395634b484e6e4cbdf17f104a16f44225307ce"
+    },
+    {
+      "path": "assets/new/targetnpc2.png",
+      "bytes": 218,
+      "sha256": "18da679724a581105a7b5cf7a5267256465864a0b70e2d491a32973e576ca893"
+    },
+    {
+      "path": "assets/new/targetplayers1.png",
+      "bytes": 353,
+      "sha256": "26e96b064be450de637d69e043d15269fbe591b54aa3c78bb67fe0b55d1094fe"
+    },
+    {
+      "path": "assets/new/targetplayers2.png",
+      "bytes": 261,
+      "sha256": "bb5e09e20a5648312366e1ff984d14342d508bdcad8521041b6fda2aca1fe3d0"
+    },
+    {
+      "path": "assets/new/targetstab.png",
+      "bytes": 299,
+      "sha256": "ab44dad0e8662107b6e5004acf398f1c7bab814471c1a0408e2cc8d86249bf4d"
+    },
+    {
+      "path": "assets/new/textguiicon.png",
+      "bytes": 170,
+      "sha256": "464cf6c85c2f995694efb6f9c9ee1da2855314daadbe116cf892582512fcb0fa"
+    },
+    {
+      "path": "assets/new/textv4.png",
+      "bytes": 1225,
+      "sha256": "b5abfa999e4ce8eef81ab20ed4f15550aba1616081dfb1960f2751c972e12ff9"
+    },
+    {
+      "path": "assets/new/textvape.png",
+      "bytes": 4397,
+      "sha256": "b7cd86a1c16722c2fc50d699b1eaa7553dba50d6dce55b9d43d822665055d416"
+    },
+    {
+      "path": "assets/new/utilityicon.png",
+      "bytes": 330,
+      "sha256": "c4391fab63a8c3cf56277f5242b4cd926d4f5ebe63fb5d6116bb0fcfb2941217"
+    },
+    {
+      "path": "assets/new/vape.png",
+      "bytes": 1316,
+      "sha256": "217b0c509a88fad6f85ad4767ed7da0ca9a420f4b0541e09735b603d3ac1348f"
+    },
+    {
+      "path": "assets/new/warning.png",
+      "bytes": 3233,
+      "sha256": "e4ee1d79d710ae63fe5edc5035c56843307ccd81cd9615145b19aa2f46fab49f"
+    },
+    {
+      "path": "assets/new/worldicon.png",
+      "bytes": 304,
+      "sha256": "e9e3c19189c3da65997edbfd957adbd951163dcc5d114be233b103484e399154"
+    },
+    {
+      "path": "assets/old/barlogo.png",
+      "bytes": 1799,
+      "sha256": "254681dfc98d84d6466ec138a97c5f2a138cc31c7281b4fe7ea924b5bd5ad69a"
+    },
+    {
+      "path": "assets/old/blatanticon.png",
+      "bytes": 552,
+      "sha256": "ed55f0bf12387e003912f1609bb92b19eddd9bb743a0a92cd48e39609ca72514"
+    },
+    {
+      "path": "assets/old/checkbox.png",
+      "bytes": 313,
+      "sha256": "502f70c82dd0f647ed9691b72754ec78362dd2c7581dda1692a5c66e623c4368"
+    },
+    {
+      "path": "assets/old/combaticon.png",
+      "bytes": 860,
+      "sha256": "1b25bedcaa2ba4cf8b470fab0db664e2758226e2eb87c19498e1dfe7c957883c"
+    },
+    {
+      "path": "assets/old/friendsicon.png",
+      "bytes": 677,
+      "sha256": "239184946c27ec8eaa08db6f4fada0b8e64aec0acad863818529bb1bc1d3917d"
+    },
+    {
+      "path": "assets/old/guiicon.png",
+      "bytes": 308,
+      "sha256": "0baa0d83d9adee4550e20f8e75704aa28adddaf9b89f465d2e74e9b6a5f0d62c"
+    },
+    {
+      "path": "assets/old/info.png",
+      "bytes": 420,
+      "sha256": "9923508692c520d076ebf536e999fd4ac575fa840a08ce43c667861708ebc39a"
+    },
+    {
+      "path": "assets/old/pin.png",
+      "bytes": 369,
+      "sha256": "236af2719e1e611e7ef09f99a1e6069c56eb92b42cae7a3125c21f7456619bc3"
+    },
+    {
+      "path": "assets/old/profilesicon.png",
+      "bytes": 366,
+      "sha256": "7604eab9d0ff3b2e08878ae5aa33a086d7c579412ad332d100d23b2714c5696b"
+    },
+    {
+      "path": "assets/old/rendericon.png",
+      "bytes": 679,
+      "sha256": "8783e89f1efdbc3aa7ebb6db5dd5e1d707ba59e4b31491320d0719aeb493f0e1"
+    },
+    {
+      "path": "assets/old/search.png",
+      "bytes": 721,
+      "sha256": "71d1b1af2e7cac8f9052fafcd0993006cc526d3424f2454bbc071e973d621b2a"
+    },
+    {
+      "path": "assets/old/settingsicon.png",
+      "bytes": 693,
+      "sha256": "865783be545a1303a8f75decb9efe2c11c6975918d4fbdf6e6830e69b0cc0a72"
+    },
+    {
+      "path": "assets/old/targetinfoicon.png",
+      "bytes": 582,
+      "sha256": "d800179659bf32f8d787109440d483fa18c9e62ea26f1722cc1891602028f2db"
+    },
+    {
+      "path": "assets/old/textguiicon.png",
+      "bytes": 447,
+      "sha256": "5c8fa1bbbcde9a8c439e531593c4c44c7381c0cfe1efc07e3cbb468e548c3ed3"
+    },
+    {
+      "path": "assets/old/textv4.png",
+      "bytes": 882,
+      "sha256": "0c8bcb3d365bfee3c568f7afc0113116a10d45973248c71abc3cb896fdb3e5b8"
+    },
+    {
+      "path": "assets/old/textvape.png",
+      "bytes": 1924,
+      "sha256": "e3b358c4d6dae5118f5b2ef002b822cb3aaff82487843f017ad423122cbb95e4"
+    },
+    {
+      "path": "assets/old/utilityicon.png",
+      "bytes": 778,
+      "sha256": "08105eede14437da1cd810148bf721851b8b05a52a7ac5dd9c3096d23ff60f91"
+    },
+    {
+      "path": "assets/old/worldicon.png",
+      "bytes": 746,
+      "sha256": "67a6a7c88f7a5abd75694de1cbd5aa2a8470fe8c19e3e4a0a773d7e5ffe0d908"
+    },
+    {
+      "path": "games/11156779721.lua",
+      "bytes": 26016,
+      "sha256": "62d7d60e42a0b1597f13d0452030534923bd83eaec48c58cd22adc437a581d46"
+    },
+    {
+      "path": "games/123804558118054.lua",
+      "bytes": 1616,
+      "sha256": "54d3e1767e2f5cc6f7dcb2ab9e91e17f09f52d269931c475d6cc60c0b2911089"
+    },
+    {
+      "path": "games/131465939650733.lua",
+      "bytes": 1616,
+      "sha256": "54d3e1767e2f5cc6f7dcb2ab9e91e17f09f52d269931c475d6cc60c0b2911089"
+    },
+    {
+      "path": "games/131823264266369.lua",
+      "bytes": 617,
+      "sha256": "a7f1116d290f33e8bfd70bbc4e755921452284c93ad3b24937492acc39e42c6e"
+    },
+    {
+      "path": "games/13246639586.lua",
+      "bytes": 1616,
+      "sha256": "5ea2e4cbd62a69c3e06f2b6bac7c7a6a1eb11c088e34943ffd6d4889d3a58ac4"
+    },
+    {
+      "path": "games/135564683255158.lua",
+      "bytes": 1615,
+      "sha256": "baa211b35d0f20cea03425037c4a815074eb6be3ba4bec8cfd1738dc58506d29"
+    },
+    {
+      "path": "games/139566161526375.lua",
+      "bytes": 36137,
+      "sha256": "1335d7851f49d50f841ba9a77abafe21616613c20f83298b214bf239db91ba6b"
+    },
+    {
+      "path": "games/142823291.lua",
+      "bytes": 4934,
+      "sha256": "66157467107b09b2446ffcbc5e391572cf120e74d832dca9a1bf4fe0661a8a53"
+    },
+    {
+      "path": "games/155615604.lua",
+      "bytes": 89536,
+      "sha256": "b4bfb55e684e430ed01bc11ca946c17e57f037dfd1ef4533c0bd0dba14477762"
+    },
+    {
+      "path": "games/5938036553.lua",
+      "bytes": 52789,
+      "sha256": "61e139f556bc29d5b9f20222bd9402dd95ba786615a1dd876d976dcd201de435"
+    },
+    {
+      "path": "games/606849621.lua",
+      "bytes": 23770,
+      "sha256": "403521ffe82610d6f595b1e81d4f853de4e0b07ca9a6002f382d0cde6a5e2b52"
+    },
+    {
+      "path": "games/6872265039.lua",
+      "bytes": 6993,
+      "sha256": "e669f8097cb531728bc52692e60f07d0e21c3e9a0e53b4f9ace53fe90d799e2e"
+    },
+    {
+      "path": "games/77790193039862.lua",
+      "bytes": 31606,
+      "sha256": "c24089aad1589d859cf9e5034d92c92d7fbf849c1a83253656fe31f64b91e1c7"
+    },
+    {
+      "path": "games/80041634734121.lua",
+      "bytes": 1620,
+      "sha256": "94190d6d6924132f89e497b01daad39d32434bfe5e6e0f7e57216225c0d92cf7"
+    },
+    {
+      "path": "games/8444591321.lua",
+      "bytes": 245,
+      "sha256": "4efbcd37eaddb471f05b78f0059ce04e6d84d70587aaa414aae234dea8d0461a"
+    },
+    {
+      "path": "games/8542259458.lua",
+      "bytes": 1616,
+      "sha256": "5ea2e4cbd62a69c3e06f2b6bac7c7a6a1eb11c088e34943ffd6d4889d3a58ac4"
+    },
+    {
+      "path": "games/8542275097.lua",
+      "bytes": 1616,
+      "sha256": "5ea2e4cbd62a69c3e06f2b6bac7c7a6a1eb11c088e34943ffd6d4889d3a58ac4"
+    },
+    {
+      "path": "games/8560631822.lua",
+      "bytes": 245,
+      "sha256": "4efbcd37eaddb471f05b78f0059ce04e6d84d70587aaa414aae234dea8d0461a"
+    },
+    {
+      "path": "games/8592115909.lua",
+      "bytes": 1616,
+      "sha256": "5ea2e4cbd62a69c3e06f2b6bac7c7a6a1eb11c088e34943ffd6d4889d3a58ac4"
+    },
+    {
+      "path": "games/8768229691.lua",
+      "bytes": 64410,
+      "sha256": "4e01dc1de5503f91629fe9f12ac12e48e0bb653a00e72937bbae5914296ff78e"
+    },
+    {
+      "path": "games/893973440.lua",
+      "bytes": 26670,
+      "sha256": "f4f9cc80932b9466b973474cf882914101a651143166507e0bbf96042107d5dc"
+    },
+    {
+      "path": "games/8951451142.lua",
+      "bytes": 1616,
+      "sha256": "5ea2e4cbd62a69c3e06f2b6bac7c7a6a1eb11c088e34943ffd6d4889d3a58ac4"
+    },
+    {
+      "path": "games/protected6872274481.lua",
+      "bytes": 1017157,
+      "sha256": "86fb45959721c6cc88bd55b6b6aa089bb5a96e3d9388495f32ddcf6898972c0a"
+    },
+    {
+      "path": "games/universal.lua",
+      "bytes": 283574,
+      "sha256": "e68a45f4b0e25c49e067b37e7db222ba74dfeee39c250876a2753673c34165e1"
+    },
+    {
+      "path": "guis/new.lua",
+      "bytes": 248625,
+      "sha256": "5ad2e82077c86662f4914e060623da521570efc25b75fc37e10351a45031ba6b"
+    },
+    {
+      "path": "guis/old.lua",
+      "bytes": 143124,
+      "sha256": "0c285bfca707b3db282bc88bfd49e9ea638aab97d59152ccabbd825b75273852"
+    },
+    {
+      "path": "init.lua",
+      "bytes": 10820,
+      "sha256": "90c07ae378de181d616efaa3d73dfd61f8c19a09a5f26792a5fdcb4412853fe7"
+    },
+    {
+      "path": "libraries/badvape-theme.lua",
+      "bytes": 12755,
+      "sha256": "50fe93a8d0de76937be088686c35b6d64009a8eaf6fd122ff6250b14162be3ee"
+    },
+    {
+      "path": "libraries/base64.lua",
+      "bytes": 1928,
+      "sha256": "771404c81a204701700acbd232d5cc49641e83af1dbce81e8fee72617f6871a4"
+    },
+    {
+      "path": "libraries/cheatenginelib.lua",
+      "bytes": 455257,
+      "sha256": "93f9055809c3044c455d529781ff7553885c27c670ec6a8f959f93df7f78fab7"
+    },
+    {
+      "path": "libraries/drawing.lua",
+      "bytes": 3602,
+      "sha256": "46b26cfac1e51beae89f0948a93752c06b29b24f8fbd53e9768838bf81b50508"
+    },
+    {
+      "path": "libraries/entity.lua",
+      "bytes": 12794,
+      "sha256": "751df75ad5f654d0997de7b357cecbbc0142f7645d0e7e02883d3f4659329214"
+    },
+    {
+      "path": "libraries/hash.lua",
+      "bytes": 53138,
+      "sha256": "1543ee8bb4dd7b4c4cdac33410e176a5fcd597fc314a63336c04b23fc308f90d"
+    },
+    {
+      "path": "libraries/prediction.lua",
+      "bytes": 7233,
+      "sha256": "76b01dc18263d91ca578851248cfaa4cc145c092842aafdfa50b8a5b35930d24"
+    },
+    {
+      "path": "libraries/string.lua",
+      "bytes": 399,
+      "sha256": "fa9f1e770cee302275f334a9e0cc1d335b5a225d9ace740135926953de49d081"
+    },
+    {
+      "path": "libraries/vm.lua",
+      "bytes": 38611,
+      "sha256": "de48dbb81cd15a3acb02d3f98e0c6b2f985dc2dd409224145005edb980f373a3"
+    },
+    {
+      "path": "loader.lua",
+      "bytes": 267,
+      "sha256": "b3acdce3022a3eff59f32527028b213ff6b9e02764d2236f2ac14a76548c21f8"
+    },
+    {
+      "path": "main.lua",
+      "bytes": 7387,
+      "sha256": "be5c57c9a221f84edc34723566b7066e6fca6840d0cb1eea1a503202ec0b0e4b"
+    },
+    {
+      "path": "os.luau",
+      "bytes": 11215,
+      "sha256": "e3f91f0a8d79a324a7c263ea5804ffc6c5c11aa79ab1f75547294cfa5c89f808"
+    },
+    {
+      "path": "profiles/features.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "profiles/packages.json",
+      "bytes": 949,
+      "sha256": "8c78a99ee9a632769a6bbcf4942db7f2009005bb5b0fe8d0767d55d6e968985f"
+    },
+    {
+      "path": "reinstall.luau",
+      "bytes": 301,
+      "sha256": "eeab45944c3f634e9bb631f07d47d39ded4ec5c6674463236b997911ca1d54e5"
+    }
+  ]
+}
