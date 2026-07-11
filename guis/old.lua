@@ -12,7 +12,7 @@ local mainapi = {
 	Legit = {Modules = {}},
 	Libraries = {},
 	Modules = {},
-	Place = game.PlaceId,
+	Place = shared.BadVapeProfilePlace or game.PlaceId,
 	Profile = 'default',
 	Profiles = {},
 	RainbowSpeed = {Value = 1},

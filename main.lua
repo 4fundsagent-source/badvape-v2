@@ -30,6 +30,13 @@ end
 local playersService = cloneref(game:GetService('Players'))
 local httpService = cloneref(game:GetService('HttpService'))
 local runtimeFolder = shared.BadVapeFolder or 'badvape'
+local protectedProfilePlaces = {
+	[131823264266369] = true,
+	[6872274481] = true,
+	[8444591321] = true,
+	[8560631822] = true,
+}
+shared.BadVapeProfilePlace = protectedProfilePlaces[game.PlaceId] and 6872274481 or game.PlaceId
 
 local redirect = function() end
 
@@ -160,6 +167,7 @@ end
 
 getgenv().used_init = true
 vape = loadstring(downloadFile('badvape/guis/'..gui..'.lua'), 'gui')(license)
+vape.Place = shared.BadVapeProfilePlace
 _G.vape = vape
 shared.vape = vape
 loadMaxPrediction()

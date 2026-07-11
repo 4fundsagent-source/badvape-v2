@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-086b72257cba049ecec4485a4f20ea16d4dced9d76987250a2d100e888794d42",
+  "revision": "sha256-9ccf9dd2ef9625b9926ba4259ef58d13810ba9e0fc3cdb771894c500f06219cc",
   "files": [
     {
       "path": "assets/new/add.png",
@@ -529,13 +529,13 @@
     },
     {
       "path": "guis/new.lua",
-      "bytes": 248625,
-      "sha256": "5ad2e82077c86662f4914e060623da521570efc25b75fc37e10351a45031ba6b"
+      "bytes": 248655,
+      "sha256": "59088b8f740b22a6a3ce4be701df379aee645a6f37fe572be3a60a7998541ef3"
     },
     {
       "path": "guis/old.lua",
-      "bytes": 143124,
-      "sha256": "0c285bfca707b3db282bc88bfd49e9ea638aab97d59152ccabbd825b75273852"
+      "bytes": 143154,
+      "sha256": "19d8c5134325e141b20db3386ec481922f182d761a3bc58a155841f73f724e39"
     },
     {
       "path": "init.lua",
@@ -594,8 +594,8 @@
     },
     {
       "path": "main.lua",
-      "bytes": 7387,
-      "sha256": "be5c57c9a221f84edc34723566b7066e6fca6840d0cb1eea1a503202ec0b0e4b"
+      "bytes": 7652,
+      "sha256": "2ad84007851aec6c6c0828bdcc6515e5b9d32355f8ab9458bbcada36f6f50ecf"
     },
     {
       "path": "os.luau",
