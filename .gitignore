@@ -6,7 +6,13 @@ games/6872274481.lua
 cache/
 simpleauth/
 profiles/*
+!profiles/2619619496.gui.txt
+!profiles/blatant6872265039.txt
+!profiles/blatant6872274481.txt
+!profiles/default6872265039.txt
+!profiles/default6872274481.txt
 !profiles/features.json
+!profiles/gui.txt
 !profiles/packages.json
 
 # Retired UI leftovers from older workspaces.
