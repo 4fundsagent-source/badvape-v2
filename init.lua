@@ -8,20 +8,6 @@ local owner = '4fundsagent-source'
 local repo = 'badvape-v2'
 local branch = 'main'
 local folder = shared.BadVapeFolder or 'badvape'
-local releaseRef = branch
-local refOk, refBody = pcall(game.HttpGet, game,
-	'https://api.github.com/repos/'..owner..'/'..repo..'/commits/'..branch, true)
-if refOk and type(refBody) == 'string' then
-	local decodeOk, refData = pcall(httpService.JSONDecode, httpService, refBody)
-	if decodeOk and type(refData) == 'table'
-		and type(refData.sha) == 'string'
-		and refData.sha:match('^[0-9a-f]+$')
-		and #refData.sha == 40 then
-		releaseRef = refData.sha
-	end
-end
-local baseUrl = 'https://raw.githubusercontent.com/'..owner..'/'..repo..'/'..releaseRef..'/'
-local manifestUrl = baseUrl..'public-manifest.json'
 local revisionPath = folder..'/cache/public-revision.txt'
 local fileIndexPath = folder..'/cache/public-file-index.txt'
 local profileSeedPath = folder..'/cache/profile-seed-v1.txt'
@@ -76,6 +62,21 @@ end
 if shared.VapeDeveloper == true then
 	shared.VapeDeveloper = nil
 end
+
+local releaseRef = branch
+local refOk, refBody = pcall(game.HttpGet, game,
+	'https://api.github.com/repos/'..owner..'/'..repo..'/commits/'..branch, true)
+if refOk and type(refBody) == 'string' then
+	local decodeOk, refData = pcall(httpService.JSONDecode, httpService, refBody)
+	if decodeOk and type(refData) == 'table'
+		and type(refData.sha) == 'string'
+		and refData.sha:match('^[0-9a-f]+$')
+		and #refData.sha == 40 then
+		releaseRef = refData.sha
+	end
+end
+local baseUrl = 'https://raw.githubusercontent.com/'..owner..'/'..repo..'/'..releaseRef..'/'
+local manifestUrl = baseUrl..'public-manifest.json'
 
 local publicGamePaths = {
 	['games/11156779721.lua'] = true,
@@ -156,9 +157,6 @@ local function isPublicPath(path)
 		return true
 	end
 	if publicLibraryPaths[path] then
-		return true
-	end
-	if path:match('^assets/new/[^/]+%.png$') or path:match('^assets/old/[^/]+%.png$') then
 		return true
 	end
 	return false
