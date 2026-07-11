@@ -308,12 +308,13 @@ if manifest then
 	local pending = {}
 	for _, entry in ipairs(manifest.files) do
 		local localPath = folder..'/'..entry.path
+		local seedProfile = seedProfilePaths[entry.path] == true
 		local needsDownload = not safeIsFile(localPath)
-		if not needsDownload then
+		if not needsDownload and not seedProfile then
 			local ok, cached = pcall(readfile, localPath)
 			needsDownload = not ok or not contentMatches(entry, cached)
 		end
-		if not needsDownload and revisionChanged then
+		if not needsDownload and revisionChanged and not seedProfile then
 			local previous = previousIndex[entry.path]
 			needsDownload = not hasPreviousIndex
 				or not previous
