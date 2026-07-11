@@ -17,7 +17,27 @@ local loadstring = function(...)
 	end
 	return res
 end
-local queue_on_teleport = queue_on_teleport or function() end
+local queueTeleport = queue_on_teleport
+    or queueonteleport
+    or (type(syn) == 'table' and syn.queue_on_teleport)
+    or (type(fluxus) == 'table' and fluxus.queue_on_teleport)
+    or (type(getgenv) == 'function' and getgenv().queue_on_teleport)
+local teleportQueueParts = shared.BadVapeTeleportQueueParts or {}
+shared.BadVapeTeleportQueueParts = teleportQueueParts
+local function refreshTeleportQueue()
+    if type(queueTeleport) ~= 'function' then return false end
+    local names = {}
+    for name in teleportQueueParts do table.insert(names, name) end
+    table.sort(names)
+    local scripts = {}
+    for _, name in names do table.insert(scripts, teleportQueueParts[name]) end
+    return pcall(queueTeleport, table.concat(scripts, '\n'))
+end
+shared.BadVapeQueueTeleport = function(name, source)
+    if type(name) ~= 'string' or type(source) ~= 'string' then return false end
+    teleportQueueParts[name] = source
+    return refreshTeleportQueue()
+end
 local isfile = isfile or function(file)
 	local suc, res = pcall(function()
 		return readfile(file)
@@ -110,12 +130,9 @@ local function finishLoading()
 		until not vape.Loaded
 	end)
 
-	local teleportedServers
-	vape:Clean(playersService.LocalPlayer.OnTeleport:Connect(function(state)
-		if (not teleportedServers) and (not shared.VapeIndependent) then
-			local teleportUid = tostring(license.Key or ''):lower()
-			if #teleportUid >= 3 and #teleportUid <= 24 and teleportUid:match('^%l[%w_]+$') then
-				teleportedServers = true
+	if not shared.VapeIndependent then
+		local teleportUid = tostring(license.Key or ''):lower()
+		if #teleportUid >= 3 and #teleportUid <= 24 and teleportUid:match('^%l[%w_]+$') then
 				local loaderUrl = httpService:JSONEncode('https://luvit.cc/badvape-api/loader')
 				local encodedUid = httpService:JSONEncode(teleportUid)
 				local teleportScript = 'shared.vapereload = true\n'
@@ -128,10 +145,9 @@ local function finishLoading()
 					teleportScript = 'shared.VapeCustomProfile = '
 						..httpService:JSONEncode(tostring(shared.VapeCustomProfile))..'\n'..teleportScript
 				end
-				queue_on_teleport(teleportScript)
-			end
+			shared.BadVapeQueueTeleport('00-loader', teleportScript)
 		end
-	end))
+	end
 
 	if not shared.vapereload then
 		if not vape.Categories then return end

@@ -35,7 +35,12 @@ end
 local run = function(func)
 	func()
 end
-local queue_on_teleport = queue_on_teleport or function() end
+local function queueTeleportPart(name, source)
+	if type(shared.BadVapeQueueTeleport) == 'function' then
+		return shared.BadVapeQueueTeleport(name, source)
+	end
+	return false
+end
 local cloneref = cloneref or function(obj)
 	return obj
 end
@@ -223,7 +228,7 @@ end
 vape:Clean(lplr.OnTeleport:Connect(function()
 	if not tpSwitch then
 		tpSwitch = true
-		queue_on_teleport(
+		queueTeleportPart('20-server-hop',
 			"shared.vapeserverhoplist = '"
 				.. table.concat(visited, '/')
 				.. "'\nshared.vapeserverhopprevious = '"
@@ -1620,7 +1625,7 @@ run(function()
 				SessionInfo:Clean(playersService.LocalPlayer.OnTeleport:Connect(function()
 					if not teleportedServers then
 						teleportedServers = true
-						queue_on_teleport(
+						queueTeleportPart('30-session-info',
 							"shared.vapesessioninfo = '"
 								.. httpService:JSONEncode(vape.Libraries.sessioninfo.Objects)
 								.. "'"
