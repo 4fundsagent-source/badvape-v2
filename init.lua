@@ -125,17 +125,15 @@ local publicGamePaths = {
 	['games/8768229691.lua'] = true,
 	['games/893973440.lua'] = true,
 	['games/8951451142.lua'] = true,
-	['games/131823264266369.lua'] = true,
+	['games/6872274481.lua'] = true,
 	['games/8444591321.lua'] = true,
 	['games/8560631822.lua'] = true,
-	['games/protected6872274481.lua'] = true,
 	['games/universal.lua'] = true,
 }
 local publicLibraryPaths = {
 	['libraries/badvape-theme.lua'] = true,
 	['libraries/base64.lua'] = true,
 	['libraries/cheatenginelib.lua'] = true,
-	['libraries/drawing.lua'] = true,
 	['libraries/entity.lua'] = true,
 	['libraries/hash.lua'] = true,
 	['libraries/prediction.lua'] = true,
@@ -149,6 +147,10 @@ local seedProfilePaths = {
 	['profiles/default6872265039.txt'] = true,
 	['profiles/default6872274481.txt'] = true,
 	['profiles/gui.txt'] = true,
+}
+local retiredRuntimePaths = {
+	['games/131823264266369.lua'] = true,
+	['games/protected6872274481.lua'] = true,
 }
 
 local function isPublicPath(path)
@@ -328,8 +330,12 @@ local function readCachedFileIndex()
 	end
 	for line in contents:gmatch('[^\r\n]+') do
 		local path, bytes, sha256 = line:match('^([^\t]+)\t(%d+)\t([0-9a-f]+)$')
+		path = path and path:gsub('\\', '/')
 		bytes = tonumber(bytes)
-		if not path or not isPublicPath(path) or not bytes or #sha256 ~= 64 then
+		if not path
+			or not (isPublicPath(path) or retiredRuntimePaths[path])
+			or not bytes
+			or #sha256 ~= 64 then
 			return {}, false
 		end
 		index[path] = {bytes = bytes, sha256 = sha256}
@@ -343,6 +349,27 @@ local function encodeFileIndex(manifest)
 		lines[index] = entry.path..'\t'..entry.bytes..'\t'..entry.sha256
 	end
 	return table.concat(lines, '\n')..'\n'
+end
+
+local function neutralizeRetiredRuntimePath(path)
+	if not retiredRuntimePaths[path] then
+		return false
+	end
+	local localPath = folder..'/'..path
+	if not safeIsFile(localPath) then
+		return true
+	end
+
+	local deleted = false
+	if type(delfile) == 'function' then
+		local ok, result = pcall(delfile, localPath)
+		deleted = ok and result ~= false and not safeIsFile(localPath)
+	end
+	if not deleted then
+		ensureParent(localPath)
+		writefile(localPath, 'return false\n')
+	end
+	return true
 end
 
 ensureFolder(folder)
@@ -362,8 +389,10 @@ if manifest then
 	local previousIndex, hasPreviousIndex = readCachedFileIndex()
 	local revisionChanged = readCachedRevision() ~= manifest.revision
 	local profileSeeded = safeIsFile(profileSeedPath)
+	local manifestPaths = {}
 	local pending = {}
 	for _, entry in ipairs(manifest.files) do
+		manifestPaths[entry.path] = true
 		local localPath = folder..'/'..entry.path
 		local seedProfile = seedProfilePaths[entry.path] == true
 		local needsDownload = not safeIsFile(localPath) or (seedProfile and not profileSeeded)
@@ -382,13 +411,23 @@ if manifest then
 			table.insert(pending, {entry = entry, localPath = localPath})
 		end
 	end
+	local retiredPending = {}
+	if hasPreviousIndex then
+		for path in previousIndex do
+			if retiredRuntimePaths[path] and not manifestPaths[path] then
+				table.insert(retiredPending, path)
+			end
+		end
+		table.sort(retiredPending)
+	end
 
 	local downloaded = {}
 	local function fetchPending(index)
 		local pendingFile = pending[index]
-		downloaded[index] = fetchPath(pendingFile.entry.path, function(contents)
-			return contentMatches(pendingFile.entry, contents)
-		end) or false
+		local contents = fetchPath(pendingFile.entry.path, function(body)
+			return contentMatches(pendingFile.entry, body)
+		end)
+		downloaded[index] = contents or false
 	end
 
 	if #pending > 1
@@ -429,6 +468,9 @@ if manifest then
 	for index, pendingFile in ipairs(pending) do
 		ensureParent(pendingFile.localPath)
 		writefile(pendingFile.localPath, downloaded[index])
+	end
+	for _, path in ipairs(retiredPending) do
+		neutralizeRetiredRuntimePath(path)
 	end
 	writefile(fileIndexPath, encodeFileIndex(manifest))
 	writefile(revisionPath, manifest.revision)

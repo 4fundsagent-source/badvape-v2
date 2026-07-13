@@ -1,10 +1,10 @@
 # BadVape
 
-BadVape uses a workspace base runtime and a separately protected game module.
-The domain loader downloads only the explicit files in `public-manifest.json`
-when the workspace is missing. Later runs reuse that cache and fetch only
-repairs or a new manifest revision. User profiles are preserved, and the
-licensing server never stores or sends runtime files.
+BadVape uses a public base runtime and one separately protected game module.
+The domain loader installs only the explicit files in `public-manifest.json`,
+reuses validated cached files, and repairs only missing or changed runtime
+files. User profiles and configuration remain untouched except for controlled
+defaults that are installed only when missing.
 
 The customer entrypoint is:
 
@@ -14,11 +14,35 @@ loadstring(game:HttpGet 'https://luvit.cc')() {
 }
 ```
 
-The loader only forwards the credential into the workspace runtime. For
-protected places, `main.lua` invokes `games/protected6872274481.lua`, where the
-production authorization check and game module live together. If that file is
-missing or authorization fails, the public UI and universal modules still load.
+## Game routing
 
-`games/6872274481.lua`, authentication server source, build tooling, and release
-keys are never published. `games/protected6872274481.lua` is the reviewed
-encrypted artifact used by protected places.
+`main.lua` always loads the universal/base modules first, then loads the
+ordinary file matching the current place ID. The route graph is deliberately
+small:
+
+- `6872274481` loads the protected canonical `games/6872274481.lua` artifact.
+- `8444591321` and `8560631822` use ordinary redirect files that select the
+  canonical 687 profile, load that same artifact, and forward the license.
+- Every other supported place loads its own ordinary game file.
+- Missing, unsupported, or rejected game modules leave the universal/base
+  runtime available instead of aborting the whole client.
+
+The protected artifact performs one synchronous v4 authorization request. It
+does not require Actors, SharedTables, prewarming, or polling. Its HTTP adapter
+supports the common executor request APIs, and its sealed payload opener has a
+pure-Luau fallback when the native `buffer` API is unavailable.
+
+## Source and installer boundaries
+
+Readable 687 source lives under the ignored private `private_source/` workspace
+and never enters this public runtime tree or its manifest. Build tooling emits
+only the sealed v4 artifact at `games/6872274481.lua`; private source,
+intermediate builds, release manifests, and release keys must never be included
+in a public archive.
+
+The installer remains manifest/cache based. It validates all downloads before
+replacing cached runtime files, falls back between raw GitHub and jsDelivr, and
+uses the installed immutable release reference for runtime repairs. During the
+canonical-route migration it may delete or neutralize only the two retired
+game filenames; it never uses a cached index to remove profiles or arbitrary
+local files.

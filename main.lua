@@ -50,37 +50,65 @@ end
 local playersService = cloneref(game:GetService('Players'))
 local httpService = cloneref(game:GetService('HttpService'))
 local runtimeFolder = shared.BadVapeFolder or 'badvape'
-local protectedProfilePlaces = {
-	[131823264266369] = true,
-	[6872274481] = true,
-	[8444591321] = true,
-	[8560631822] = true,
-}
-shared.BadVapeProfilePlace = protectedProfilePlaces[game.PlaceId] and 6872274481 or game.PlaceId
 
 local redirect = function() end
 
+local function readCachedFile(path)
+	local ok, value = pcall(readfile, path)
+	return ok and type(value) == 'string' and value ~= '' and value or nil
+end
+
+local function installedReleaseRef()
+	local value = readCachedFile('badvape/cache/public-release-ref.txt')
+	return value and #value == 40 and value:match('^[0-9a-f]+$') and value or 'main'
+end
+
 local function downloadFile(path, func)
-	if not isfile(path) then
+	local contents = readCachedFile(path)
+	if not contents then
 		if shared.VapeDeveloper then
 			error('Missing local BadVape file: '..path)
 		end
 
-		local suc, res = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..readfile('badvape/profiles/commit.txt')..'/'..select(1, path:gsub('badvape/', '')), true)
-		end)
-		if not suc or res == '404: Not Found' then
-			error(tostring(res), 0)
-		end
-		if suc then
-			if path:find('.lua') then
-				res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
+		local relative = path:gsub('^badvape/', '', 1)
+		local releaseRef = installedReleaseRef()
+		local urls = {
+			'https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..releaseRef..'/'..relative,
+			'https://cdn.jsdelivr.net/gh/4fundsagent-source/badvape-v2@'..releaseRef..'/'..relative,
+		}
+		local lastError = 'download failed'
+		for _, url in urls do
+			local ok, response = pcall(function()
+				return game:HttpGet(url)
+			end)
+			if ok and type(response) == 'string' and response ~= '' and response ~= '404: Not Found' then
+				local wrote, writeError = pcall(writefile, path, response)
+				if not wrote then
+					error(tostring(writeError), 0)
+				end
+				contents = response
+				break
 			end
-			writefile(path, res)
+			lastError = response
+		end
+		if not contents then
+			error(tostring(lastError), 0)
 		end
 	end
-	return (func or readfile)(path)
+	return func and func(path) or contents
 end
+
+local ownedDownloadFile
+ownedDownloadFile = function(path)
+	if type(path) ~= 'string'
+		or not path:match('^badvape/[%w%._/%-]+$')
+		or path:find('..', 1, true) then
+		return nil
+	end
+	local ok, result = pcall(downloadFile, path)
+	return ok and result or nil
+end
+shared.BadVapeDownloadFile = ownedDownloadFile
 
 local function loadBadVapeTheme()
 	if not vape or not vape.Categories or not vape.Categories.Render then
@@ -180,9 +208,18 @@ end
 
 getgenv().used_init = true
 vape = loadstring(downloadFile('badvape/guis/'..gui..'.lua'), 'gui')(license)
-vape.Place = shared.BadVapeProfilePlace
+vape.Place = game.PlaceId
 _G.vape = vape
 shared.vape = vape
+local previousUninject = vape.Uninject
+if type(previousUninject) == 'function' then
+	vape.Uninject = function(self, ...)
+		if shared.BadVapeDownloadFile == ownedDownloadFile then
+			shared.BadVapeDownloadFile = nil
+		end
+		return previousUninject(self, ...)
+	end
+end
 loadMaxPrediction()
 loadBadVapeTheme()
 
@@ -192,61 +229,30 @@ if shared.maincat then
 	return
 end
 
+local function loadGameModule(placeId)
+	vape.Place = placeId
+	local gamePath = 'badvape/games/'..placeId..'.lua'
+	local gameSource = readCachedFile(gamePath)
+		or shared.BadVapeDownloadFile(gamePath)
+	if type(gameSource) ~= 'string' or gameSource == '404: Not Found' then
+		return false
+	end
+
+	local gameChunk = loadstring(gameSource, tostring(placeId))
+	if type(gameChunk) ~= 'function' then
+		return false
+	end
+	local ok, loaded = pcall(gameChunk, license)
+	if not ok or loaded == false then
+		vape:CreateNotification('BadVape', 'Game module unavailable; loaded base modules only.', 8, 'warning')
+		return false
+	end
+	return true
+end
+
 if not shared.VapeIndependent then
 	loadstring(downloadFile('badvape/games/universal.lua'), 'universal')(license)
-	local function routesToProtectedBedwars(placeId)
-		if placeId == 131823264266369 or placeId == 6872274481 then
-			return true
-		end
-
-		local routePath = 'badvape/games/'..placeId..'.lua'
-		if not isfile(routePath) then
-			return false
-		end
-
-		local success, source = pcall(readfile, routePath)
-		return success and type(source) == 'string' and (
-			source:match('vape%.Place%s*=%s*6872274481') ~= nil
-			or source:find('protected6872274481.lua', 1, true) ~= nil
-		)
-	end
-
-	local gamePath = 'badvape/games/'..game.PlaceId..'.lua'
-	local protectedGamePath
-	if routesToProtectedBedwars(game.PlaceId) then
-		vape.Place = 6872274481
-		gamePath = 'badvape/games/protected6872274481.lua'
-		protectedGamePath = gamePath
-	end
-	if protectedGamePath and not isfile(gamePath) and not shared.VapeDeveloper then
-		pcall(downloadFile, gamePath)
-	end
-	if isfile(gamePath) then
-		local gameChunk = loadstring(readfile(gamePath), tostring(game.PlaceId))
-		if protectedGamePath then
-			local gameOk, gameLoaded = false, false
-			if gameChunk then
-				gameOk, gameLoaded = pcall(gameChunk, license)
-			end
-			if not gameOk or gameLoaded ~= true then
-				vape:CreateNotification('BadVape', 'Protected game module unavailable; loaded base modules only.', 8, 'warning')
-			end
-		elseif gameChunk then
-			gameChunk(license)
-		end
-	else
-		if protectedGamePath then
-			vape:CreateNotification('BadVape', 'Protected game module missing; loaded base modules only.', 8, 'warning')
-		end
-		if not protectedGamePath and not shared.VapeDeveloper then
-			local suc, res = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..readfile('badvape/profiles/commit.txt')..'/games/'..game.PlaceId..'.lua', true)
-			end)
-			if suc and res ~= '404: Not Found' then
-				loadstring(downloadFile('badvape/games/'..game.PlaceId..'.lua'), tostring(game.PlaceId))(license)
-			end
-		end
-	end
+	loadGameModule(game.PlaceId)
 	loadBadVapeTheme()
 	finishLoading()
 else

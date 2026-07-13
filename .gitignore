@@ -1,6 +1,5 @@
-# Private source is never published. The reviewed encrypted protected artifact
-# is included in the public release repository and manifest.
-games/6872274481.lua
+# Readable protected source lives outside this public runtime tree. The
+# reviewed encrypted games/6872274481.lua artifact is published normally.
 
 # Runtime/customer state is never part of the public repository.
 cache/

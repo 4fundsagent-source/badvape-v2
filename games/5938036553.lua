@@ -61,54 +61,35 @@ local prediction = vape.Libraries.prediction
 local targetinfo = vape.Libraries.targetinfo
 local sessioninfo = vape.Libraries.sessioninfo
 local getcustomasset = vape.Libraries.getcustomasset
-local drawingactor = loadstring(downloadFile('badvape/libraries/drawing.lua'), 'drawing')(...)
 local function notif(...)
 	return vape:CreateNotification(...)
 end
 
-if not select(1, ...) and game.PlaceId == 5938036553 then
-	if run_on_actor and getactors then
-		local oldreload = shared.vapereload
-		vape.Load = function()
-			task.delay(0.1, function()
-				vape:Uninject()
-			end)
-		end
-
-		task.spawn(function()
-			repeat
-				task.wait()
-			until not shared.vape
-			local executionString = "loadfile('badvape/main.lua')(" .. drawingactor .. ')'
-			for i, v in shared do
-				if type(v) == 'string' then
-					executionString = string.format("shared.%s = '%s'", i, v) .. '\n' .. executionString
-				elseif type(v) == 'boolean' then
-					executionString = string.format('shared.%s = %s', i, tostring(v)) .. '\n' .. executionString
-				end
+local function findFrontlinesMain()
+	if type(getgc) ~= 'function' then
+		return nil
+	end
+	local ok, objects = pcall(getgc, true)
+	if not ok or type(objects) ~= 'table' then
+		return nil
+	end
+	for _, object in objects do
+		if type(object) == 'table' then
+			local state = rawget(object, '_G')
+			if rawget(object, 'script') and type(state) == 'table'
+				and type(rawget(state, 'append_exe_set')) == 'function' then
+				return state
 			end
-			if oldreload then
-				executionString = 'shared.vapereload = true\n' .. executionString
-			end
-
-			for i, v in getactors() do
-				if tostring(v) == 'frontlines_client_actor' then
-					run_on_actor(v, executionString)
-					return
-				end
-			end
-			notif('BadVape', 'Failed to find actor', 10, 'alert')
-		end)
-	else
-		vape.Load = function()
-			notif('BadVape', 'Missing actor functions.', 10, 'alert')
 		end
 	end
-
-	return
+return nil
 end
 
-local frontlines = { Functions = {} }
+local frontlinesMain = findFrontlinesMain()
+if not frontlinesMain then
+	return false
+end
+local frontlines = { Functions = {}, Main = frontlinesMain }
 
 local function addBlur(parent)
 	local blur = Instance.new('ImageLabel')
@@ -180,6 +161,7 @@ local function isFriend(plr, recolor)
 end
 
 run(function()
+	local discoveryAttempts = 0
 	repeat
 		if not frontlines.ShootFunction then
 			local gc = getgc(true)
@@ -212,7 +194,11 @@ run(function()
 				and (game.PlaceId == 5938036553 or game.StarterGui:GetCore('ResetButtonCallback') == false)
 			)
 		then
-			task.wait(1)
+			discoveryAttempts += 1
+			if discoveryAttempts >= 3 then
+				return
+			end
+			task.wait(0.1)
 		else
 			break
 		end
@@ -290,7 +276,7 @@ run(function()
 		end)
 	end
 
-	vape:Clean(Drawing.kill or function() end)
+	vape:Clean(type(Drawing) == 'table' and Drawing.kill or function() end)
 	vape:Clean(function()
 		for i, v in frontlines.Functions do
 			hookfunction(i, v)
@@ -299,8 +285,8 @@ run(function()
 		table.clear(frontlines)
 	end)
 end)
-if vape.Loaded == nil then
-	return
+if vape.Loaded == nil or not frontlines.ShootFunction or not frontlines.Events then
+	return false
 end
 
 run(function()

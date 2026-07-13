@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-b7372c9403527b8bb88f4e5b85f5c37f3d1fbbfdd04795bde73811cf3c2f0ebb",
+  "revision": "sha256-05b9464ee627ef9aa3d35a2693636b77cc0622340a05f04bc77de12ed39be01a",
   "files": [
     {
       "path": "games/11156779721.lua",
@@ -16,11 +16,6 @@
       "path": "games/131465939650733.lua",
       "bytes": 1616,
       "sha256": "54d3e1767e2f5cc6f7dcb2ab9e91e17f09f52d269931c475d6cc60c0b2911089"
-    },
-    {
-      "path": "games/131823264266369.lua",
-      "bytes": 617,
-      "sha256": "a7f1116d290f33e8bfd70bbc4e755921452284c93ad3b24937492acc39e42c6e"
     },
     {
       "path": "games/13246639586.lua",
@@ -49,8 +44,8 @@
     },
     {
       "path": "games/5938036553.lua",
-      "bytes": 52789,
-      "sha256": "61e139f556bc29d5b9f20222bd9402dd95ba786615a1dd876d976dcd201de435"
+      "bytes": 52369,
+      "sha256": "d675f8ca036a8068a6a94fdc1e0eaa5b208e3f428c673cf2655ef903a6b39d1f"
     },
     {
       "path": "games/606849621.lua",
@@ -61,6 +56,11 @@
       "path": "games/6872265039.lua",
       "bytes": 6993,
       "sha256": "e669f8097cb531728bc52692e60f07d0e21c3e9a0e53b4f9ace53fe90d799e2e"
+    },
+    {
+      "path": "games/6872274481.lua",
+      "bytes": 1004636,
+      "sha256": "0b584c4aaf2c740a63d700e6538f0746be4eb52a1344a39df2fc3780fa567b9a"
     },
     {
       "path": "games/77790193039862.lua",
@@ -74,8 +74,8 @@
     },
     {
       "path": "games/8444591321.lua",
-      "bytes": 245,
-      "sha256": "4efbcd37eaddb471f05b78f0059ce04e6d84d70587aaa414aae234dea8d0461a"
+      "bytes": 859,
+      "sha256": "6af6a95fca677518a0c490c0798fc704dd9b6d561db4ae9a7a8daf8694f7fcbe"
     },
     {
       "path": "games/8542259458.lua",
@@ -89,8 +89,8 @@
     },
     {
       "path": "games/8560631822.lua",
-      "bytes": 245,
-      "sha256": "4efbcd37eaddb471f05b78f0059ce04e6d84d70587aaa414aae234dea8d0461a"
+      "bytes": 859,
+      "sha256": "6af6a95fca677518a0c490c0798fc704dd9b6d561db4ae9a7a8daf8694f7fcbe"
     },
     {
       "path": "games/8592115909.lua",
@@ -113,11 +113,6 @@
       "sha256": "5ea2e4cbd62a69c3e06f2b6bac7c7a6a1eb11c088e34943ffd6d4889d3a58ac4"
     },
     {
-      "path": "games/protected6872274481.lua",
-      "bytes": 1017157,
-      "sha256": "86fb45959721c6cc88bd55b6b6aa089bb5a96e3d9388495f32ddcf6898972c0a"
-    },
-    {
       "path": "games/universal.lua",
       "bytes": 283724,
       "sha256": "f1742577d393e5f2bf53757e9fc76e9a0a74500e02e26f41443d50359ed2de03"
@@ -134,8 +129,8 @@
     },
     {
       "path": "init.lua",
-      "bytes": 13335,
-      "sha256": "0d8c58d7f3962b136d2040ab1b7a57484a7218ae93909cf446d531bdf384fa30"
+      "bytes": 14334,
+      "sha256": "6fd5c821138e7b1248abdc763e73730a8b493e3551849456695307b085c3f32c"
     },
     {
       "path": "libraries/badvape-theme.lua",
@@ -151,11 +146,6 @@
       "path": "libraries/cheatenginelib.lua",
       "bytes": 455257,
       "sha256": "93f9055809c3044c455d529781ff7553885c27c670ec6a8f959f93df7f78fab7"
-    },
-    {
-      "path": "libraries/drawing.lua",
-      "bytes": 3602,
-      "sha256": "46b26cfac1e51beae89f0948a93752c06b29b24f8fbd53e9768838bf81b50508"
     },
     {
       "path": "libraries/entity.lua",
@@ -189,8 +179,8 @@
     },
     {
       "path": "main.lua",
-      "bytes": 8290,
-      "sha256": "83bf4ef890a65ce31bc6b48e75dafd7cb1a4d3366a44ab6a13780242fd93b51f"
+      "bytes": 8072,
+      "sha256": "9bfd83dc4df6ebbbecd1bbfc85083ff801eac2321d20f91cda580c65119837d5"
     },
     {
       "path": "os.luau",
@@ -209,8 +199,8 @@
     },
     {
       "path": "profiles/blatant6872274481.txt",
-      "bytes": 40545,
-      "sha256": "c653d1f247ee6e718eb23c47fa435dffab2acba30fa4f0342068e2a2c743dc8d"
+      "bytes": 40544,
+      "sha256": "f942da4e65f61c7a6bb85b6e00e5f23cbeb67efd52a56f87d92cf8d880ade037"
     },
     {
       "path": "profiles/default6872265039.txt",
