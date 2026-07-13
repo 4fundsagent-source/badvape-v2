@@ -7,6 +7,16 @@ local httpService = game:GetService('HttpService')
 local owner = '4fundsagent-source'
 local repo = 'badvape-v2'
 local branch = 'main'
+local pinnedReleaseRef
+if shared.BadVapeReleaseRef ~= nil then
+	if type(shared.BadVapeReleaseRef) ~= 'string'
+		or not shared.BadVapeReleaseRef:match('^[0-9a-f]+$')
+		or #shared.BadVapeReleaseRef ~= 40 then
+		error('invalid BadVape release ref', 0)
+	end
+	pinnedReleaseRef = shared.BadVapeReleaseRef
+	branch = pinnedReleaseRef
+end
 local folder = shared.BadVapeFolder or 'badvape'
 local revisionPath = folder..'/cache/public-revision.txt'
 local fileIndexPath = folder..'/cache/public-file-index.txt'
@@ -73,7 +83,8 @@ for attempt = 1, 3 do
 		if decodeOk and type(refData) == 'table'
 			and type(refData.sha) == 'string'
 			and refData.sha:match('^[0-9a-f]+$')
-			and #refData.sha == 40 then
+			and #refData.sha == 40
+			and (not pinnedReleaseRef or refData.sha == pinnedReleaseRef) then
 			releaseRef = refData.sha
 			break
 		end
@@ -85,12 +96,19 @@ end
 if not releaseRef and safeIsFile(releaseRefPath) then
 	local ok, cachedRef = pcall(readfile, releaseRefPath)
 	if ok and type(cachedRef) == 'string'
-		and cachedRef:match('^[0-9a-f]+$') and #cachedRef == 40 then
+		and cachedRef:match('^[0-9a-f]+$') and #cachedRef == 40
+		and (not pinnedReleaseRef or cachedRef == pinnedReleaseRef) then
 		releaseRef = cachedRef
 	end
 end
 if not releaseRef then
 	if safeIsFile(folder..'/os.luau') then
+		if pinnedReleaseRef then
+			local cachedRefOk, cachedRef = pcall(readfile, releaseRefPath)
+			if not cachedRefOk or cachedRef ~= pinnedReleaseRef then
+				error('pinned BadVape cache mismatch', 0)
+			end
+		end
 		warn('BadVape release lookup failed; using the cached public runtime.')
 		return runCachedRuntime()
 	end
