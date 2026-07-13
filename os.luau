@@ -177,15 +177,24 @@ if shared.VapeDeveloper == nil then
 end
 shared.vapereload = shared.vapereload or false
 
+local redirectRoots = {'catrewrite', 'badrewrite', 'badvape'}
 local function redirectPath(path)
 	if type(path) ~= 'string' then
 		return path
 	end
 
 	path = path:gsub('\\', '/')
-	path = path:gsub('^catrewrite', folder)
-	path = path:gsub('^badrewrite', folder)
-	path = path:gsub('^badvape', folder)
+	if path == folder or path:sub(1, #folder + 1) == folder..'/' then
+		return path
+	end
+	for _, root in redirectRoots do
+		if path == root then
+			return folder
+		end
+		if path:sub(1, #root + 1) == root..'/' then
+			return folder..path:sub(#root + 1)
+		end
+	end
 
 	return path
 end
