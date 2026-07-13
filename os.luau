@@ -98,39 +98,56 @@ if not safeIsFile(folder..'/profiles/gui.txt') then
 	writefile(folder..'/profiles/gui.txt', 'new')
 end
 
-local profileResetMarker = folder..'/profiles/.badvape-reset'
-local preservedProfiles = {
-	['.badvape-reset'] = true,
-	['.badvape-color'] = true,
-	['commit.txt'] = true,
-	['features.json'] = true,
-	['gui.txt'] = true,
-	['packages.json'] = true,
-}
-
 local forwardedLicense = ...
 local license = type(forwardedLicense) == 'table' and forwardedLicense or {}
 license.Key = type(license.Key) == 'string' and license.Key or nil
 license.Commit = license.Commit or 'local'
 
-local function resetProfiles()
-	if safeIsFile(profileResetMarker) or not listfiles then
-		return
-	end
+local builtInProfileNames = {'default', 'blatant'}
+local function ensureBuiltInProfiles(profiles)
+	local changed = type(profiles) ~= 'table'
+	profiles = type(profiles) == 'table' and profiles or {}
+	local existing = {}
 
-	for _, path in listfiles(folder..'/profiles') do
-		local normalized = path:gsub('\\', '/')
-		local name = normalized:match('[^/]+$')
-
-		if name and not preservedProfiles[name] and isfile(normalized) and delfile then
-			pcall(delfile, normalized)
+	for _, profile in profiles do
+		if type(profile) == 'table' and type(profile.Name) == 'string' then
+			existing[profile.Name] = true
 		end
 	end
 
-	writefile(profileResetMarker, '1')
+	for _, name in builtInProfileNames do
+		if not existing[name] then
+			table.insert(profiles, {Name = name, Bind = {}})
+			changed = true
+		end
+	end
+
+	return profiles, changed
 end
 
-resetProfiles()
+local function repairBuiltInProfileList(path)
+	if not safeIsFile(path) then
+		return false
+	end
+
+	local success, data = pcall(function()
+		return httpService:JSONDecode(readfile(path))
+	end)
+	if not success or type(data) ~= 'table' then
+		return false
+	end
+
+	local changed
+	data.Profiles, changed = ensureBuiltInProfiles(data.Profiles)
+	if type(data.Profile) ~= 'string' or data.Profile == '' then
+		data.Profile = 'default'
+		changed = true
+	end
+	if changed then
+		writefile(path, httpService:JSONEncode(data))
+	end
+	return changed
+end
 
 local guiColorMarker = folder..'/profiles/.badvape-color'
 local badVapeGuiTheme = {
@@ -146,7 +163,10 @@ local function applyBadVapeGuiTheme(path)
 		Categories = {},
 		Keybind = {'RightShift'},
 		Profile = 'default',
-		Profiles = {{Name = 'default', Bind = {}}},
+		Profiles = {
+			{Name = 'default', Bind = {}},
+			{Name = 'blatant', Bind = {}},
+		},
 	}
 
 	if safeIsFile(path) then
@@ -165,7 +185,7 @@ local function applyBadVapeGuiTheme(path)
 	data.Categories.Main.Options['GUI Theme'] = badVapeGuiTheme
 	data.Keybind = type(data.Keybind) == 'table' and data.Keybind or {'RightShift'}
 	data.Profile = type(data.Profile) == 'string' and data.Profile or 'default'
-	data.Profiles = type(data.Profiles) == 'table' and data.Profiles or {{Name = data.Profile, Bind = {}}}
+	data.Profiles = ensureBuiltInProfiles(data.Profiles)
 
 	writefile(path, httpService:JSONEncode(data))
 end
@@ -189,6 +209,7 @@ local function applyBadVapeGuiThemeOnce()
 end
 
 applyBadVapeGuiThemeOnce()
+pcall(repairBuiltInProfileList, folder..'/profiles/2619619496.gui.txt')
 
 shared.catdata = nil
 if shared.VapeDeveloper == nil then
