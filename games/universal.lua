@@ -1,4 +1,23 @@
-local vape = shared.vape 
+local function resolveRuntimeEnvironment()
+	if type(getgenv) == 'function' then
+		local ok, environment = pcall(getgenv)
+		if ok and type(environment) == 'table' then
+			return environment
+		end
+	end
+	if type(getfenv) == 'function' then
+		local ok, environment = pcall(getfenv, 0)
+		if ok and type(environment) == 'table' then
+			return environment
+		end
+	end
+	if type(_G) == 'table' then
+		return _G
+	end
+	return {}
+end
+local runtimeEnvironment = resolveRuntimeEnvironment()
+local vape = shared.vape
 local loadstring = function(...)
 	local res, err = loadstring(...)
 	if err and vape then
@@ -1410,7 +1429,7 @@ local mouseClicked
 local Fly
 local LongJump
 
-getgenv().used_init = true
+runtimeEnvironment.used_init = true
 
 run(function()
 	local Radar

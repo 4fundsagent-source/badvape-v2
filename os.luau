@@ -17,7 +17,27 @@ local function getRuntimeFolder()
 	return 'badvape'
 end
 
+local function resolveRuntimeEnvironment()
+	if type(getgenv) == 'function' then
+		local ok, environment = pcall(getgenv)
+		if ok and type(environment) == 'table' then
+			return environment
+		end
+	end
+	if type(getfenv) == 'function' then
+		local ok, environment = pcall(getfenv, 0)
+		if ok and type(environment) == 'table' then
+			return environment
+		end
+	end
+	if type(_G) == 'table' then
+		return _G
+	end
+	return {}
+end
+
 local folder = getRuntimeFolder()
+local runtimeEnvironment = resolveRuntimeEnvironment()
 shared.BadVapeFolder = folder
 local protect = newcclosure or function(callback)
 	return callback
@@ -200,12 +220,12 @@ local function redirectPath(path)
 end
 
 local oldReadfile = readfile
-getgenv().readfile = protect(function(path)
+runtimeEnvironment.readfile = protect(function(path)
 	return oldReadfile(redirectPath(path))
 end)
 
 local oldWritefile = writefile
-getgenv().writefile = protect(function(path, content)
+runtimeEnvironment.writefile = protect(function(path, content)
 	local redirected = redirectPath(path)
 	local parts = redirected:split('/')
 	local current = ''
@@ -220,28 +240,28 @@ end)
 
 local oldIsfile = isfile
 if oldIsfile then
-	getgenv().isfile = protect(function(path)
+	runtimeEnvironment.isfile = protect(function(path)
 		return oldIsfile(redirectPath(path))
 	end)
 end
 
 local oldIsfolder = isfolder
 if oldIsfolder then
-	getgenv().isfolder = protect(function(path)
+	runtimeEnvironment.isfolder = protect(function(path)
 		return oldIsfolder(redirectPath(path))
 	end)
 end
 
 local oldMakefolder = makefolder
 if oldMakefolder then
-	getgenv().makefolder = protect(function(path)
+	runtimeEnvironment.makefolder = protect(function(path)
 		return oldMakefolder(redirectPath(path))
 	end)
 end
 
 local oldListfiles = listfiles
 if oldListfiles then
-	getgenv().listfiles = protect(function(path)
+	runtimeEnvironment.listfiles = protect(function(path)
 		local files = oldListfiles(redirectPath(path))
 		local normalized = {}
 
@@ -255,7 +275,7 @@ end
 
 local oldDelfile = delfile
 if oldDelfile then
-	getgenv().delfile = protect(function(path)
+	runtimeEnvironment.delfile = protect(function(path)
 		return oldDelfile(redirectPath(path))
 	end)
 end
@@ -327,7 +347,7 @@ local assetIdMap = {
 
 local oldGetcustomasset = getcustomasset
 if oldGetcustomasset then
-	getgenv().getcustomasset = protect(function(path)
+	runtimeEnvironment.getcustomasset = protect(function(path)
 		if type(path) == 'string' then
 			local filename = path:match('[^/\\]+%.%w+$')
 			if filename and assetIdMap[filename] then

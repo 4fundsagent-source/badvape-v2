@@ -1,4 +1,23 @@
 local forwardedLicense = ...
+local function resolveRuntimeEnvironment()
+	if type(getgenv) == 'function' then
+		local ok, environment = pcall(getgenv)
+		if ok and type(environment) == 'table' then
+			return environment
+		end
+	end
+	if type(getfenv) == 'function' then
+		local ok, environment = pcall(getfenv, 0)
+		if ok and type(environment) == 'table' then
+			return environment
+		end
+	end
+	if type(_G) == 'table' then
+		return _G
+	end
+	return {}
+end
+local runtimeEnvironment = resolveRuntimeEnvironment()
 local license = {}
 if type(forwardedLicense) == 'table' then
 	for key, value in forwardedLicense do
@@ -21,7 +40,7 @@ local queueTeleport = queue_on_teleport
     or queueonteleport
     or (type(syn) == 'table' and syn.queue_on_teleport)
     or (type(fluxus) == 'table' and fluxus.queue_on_teleport)
-    or (type(getgenv) == 'function' and getgenv().queue_on_teleport)
+    or runtimeEnvironment.queue_on_teleport
 local teleportQueueParts = shared.BadVapeTeleportQueueParts or {}
 shared.BadVapeTeleportQueueParts = teleportQueueParts
 local function refreshTeleportQueue()
@@ -206,7 +225,7 @@ if not isfile('badvape/profiles/commit.txt') then
 	writefile('badvape/profiles/commit.txt', 'main')
 end
 
-getgenv().used_init = true
+runtimeEnvironment.used_init = true
 vape = loadstring(downloadFile('badvape/guis/'..gui..'.lua'), 'gui')(license)
 vape.Place = game.PlaceId
 _G.vape = vape

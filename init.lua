@@ -171,6 +171,85 @@ local retiredRuntimePaths = {
 	['games/protected6872274481.lua'] = true,
 }
 
+local commonInstallPaths = {
+	['init.lua'] = true,
+	['loader.lua'] = true,
+	['main.lua'] = true,
+	['os.luau'] = true,
+	['reinstall.luau'] = true,
+	['games/universal.lua'] = true,
+	['libraries/badvape-theme.lua'] = true,
+	['libraries/entity.lua'] = true,
+	['libraries/hash.lua'] = true,
+	['libraries/prediction.lua'] = true,
+	['libraries/string.lua'] = true,
+	['profiles/features.json'] = true,
+	['profiles/packages.json'] = true,
+}
+
+local gameDependencyPaths = {
+	[6872274481] = {
+		['libraries/cheatenginelib.lua'] = true,
+	},
+	[8444591321] = {
+		['games/6872274481.lua'] = true,
+		['libraries/cheatenginelib.lua'] = true,
+	},
+	[8560631822] = {
+		['games/6872274481.lua'] = true,
+		['libraries/cheatenginelib.lua'] = true,
+	},
+	[606849621] = {
+		['libraries/vm.lua'] = true,
+	},
+}
+
+local function selectedGuiPath()
+	local gui = 'new'
+	local guiPath = folder..'/profiles/gui.txt'
+	if safeIsFile(guiPath) then
+		local ok, value = pcall(readfile, guiPath)
+		if ok and type(value) == 'string' then
+			value = value:match('^%s*(.-)%s*$')
+			if value == 'old' then
+				gui = 'old'
+			end
+		end
+	end
+	return 'guis/'..gui..'.lua'
+end
+
+local function requiredPublicPaths(manifest)
+	local available, required = {}, {}
+	for _, entry in ipairs(manifest.files) do
+		available[entry.path] = true
+	end
+
+	local function add(path)
+		if available[path] then
+			required[path] = true
+		end
+	end
+
+	for path in commonInstallPaths do
+		add(path)
+	end
+	for path in seedProfilePaths do
+		add(path)
+	end
+	add(selectedGuiPath())
+
+	local placeId = tonumber(game.PlaceId)
+	local gamePath = placeId and 'games/'..placeId..'.lua' or nil
+	if gamePath and publicGamePaths[gamePath] then
+		add(gamePath)
+	end
+	for path in gameDependencyPaths[placeId] or {} do
+		add(path)
+	end
+	return required
+end
+
 local function isPublicPath(path)
 	if type(path) ~= 'string'
 		or path == ''
@@ -361,12 +440,27 @@ local function readCachedFileIndex()
 	return index, true
 end
 
-local function encodeFileIndex(manifest)
-	local lines = {}
-	for index, entry in ipairs(manifest.files) do
-		lines[index] = entry.path..'\t'..entry.bytes..'\t'..entry.sha256
+local function copyFileIndex(index)
+	local copied = {}
+	for path, entry in index do
+		if isPublicPath(path) and safeIsFile(folder..'/'..path) then
+			copied[path] = {bytes = entry.bytes, sha256 = entry.sha256}
+		end
 	end
-	return table.concat(lines, '\n')..'\n'
+	return copied
+end
+
+local function encodeFileIndex(index)
+	local paths, lines = {}, {}
+	for path in index do
+		table.insert(paths, path)
+	end
+	table.sort(paths)
+	for lineIndex, path in ipairs(paths) do
+		local entry = index[path]
+		lines[lineIndex] = path..'\t'..entry.bytes..'\t'..entry.sha256
+	end
+	return #lines > 0 and table.concat(lines, '\n')..'\n' or ''
 end
 
 local function neutralizeRetiredRuntimePath(path)
@@ -405,28 +499,33 @@ end
 
 if manifest then
 	local previousIndex, hasPreviousIndex = readCachedFileIndex()
-	local revisionChanged = readCachedRevision() ~= manifest.revision
 	local profileSeeded = safeIsFile(profileSeedPath)
+	local requiredPaths = requiredPublicPaths(manifest)
+	local nextIndex = copyFileIndex(previousIndex)
 	local manifestPaths = {}
 	local pending = {}
 	for _, entry in ipairs(manifest.files) do
 		manifestPaths[entry.path] = true
-		local localPath = folder..'/'..entry.path
-		local seedProfile = seedProfilePaths[entry.path] == true
-		local needsDownload = not safeIsFile(localPath) or (seedProfile and not profileSeeded)
-		if not needsDownload and not seedProfile then
-			local ok, cached = pcall(readfile, localPath)
-			needsDownload = not ok or not contentMatches(entry, cached)
-		end
-		if not needsDownload and revisionChanged and not seedProfile then
-			local previous = previousIndex[entry.path]
-			needsDownload = not hasPreviousIndex
-				or not previous
-				or previous.bytes ~= entry.bytes
-				or previous.sha256 ~= entry.sha256
-		end
-		if needsDownload then
-			table.insert(pending, {entry = entry, localPath = localPath})
+		if requiredPaths[entry.path] then
+			local localPath = folder..'/'..entry.path
+			local seedProfile = seedProfilePaths[entry.path] == true
+			local needsDownload = not safeIsFile(localPath) or (seedProfile and not profileSeeded)
+			if not needsDownload and not seedProfile then
+				local ok, cached = pcall(readfile, localPath)
+				needsDownload = not ok or not contentMatches(entry, cached)
+			end
+			if not needsDownload and not seedProfile then
+				local previous = previousIndex[entry.path]
+				needsDownload = not hasPreviousIndex
+					or not previous
+					or previous.bytes ~= entry.bytes
+					or previous.sha256 ~= entry.sha256
+			end
+			if needsDownload then
+				table.insert(pending, {entry = entry, localPath = localPath})
+			else
+				nextIndex[entry.path] = {bytes = entry.bytes, sha256 = entry.sha256}
+			end
 		end
 	end
 	local retiredPending = {}
@@ -486,11 +585,15 @@ if manifest then
 	for index, pendingFile in ipairs(pending) do
 		ensureParent(pendingFile.localPath)
 		writefile(pendingFile.localPath, downloaded[index])
+		nextIndex[pendingFile.entry.path] = {
+			bytes = pendingFile.entry.bytes,
+			sha256 = pendingFile.entry.sha256,
+		}
 	end
 	for _, path in ipairs(retiredPending) do
 		neutralizeRetiredRuntimePath(path)
 	end
-	writefile(fileIndexPath, encodeFileIndex(manifest))
+	writefile(fileIndexPath, encodeFileIndex(nextIndex))
 	writefile(revisionPath, manifest.revision)
 	if releaseRef:match('^[0-9a-f]+$') and #releaseRef == 40 then
 		writefile(releaseRefPath, releaseRef)
