@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-5f76c2e6b5ae0010ec73f7081e8db2c2428665a6fa401d6d96e3d31b5a02c117",
+  "revision": "sha256-02bbad36991f05565098878171ba1f39791c43b6a23ce10bbaf9c61e14f61492",
   "files": [
     {
       "path": "games/11156779721.lua",
@@ -59,8 +59,8 @@
     },
     {
       "path": "games/6872274481.lua",
-      "bytes": 191633,
-      "sha256": "88799e619dfd787a7c368327e65d3fcf6e053ac669b0b6d521822efba20fd416"
+      "bytes": 1082489,
+      "sha256": "3262cb5b69592410d88c24448c583c469fb430df8239f2473dec2944a5f22547"
     },
     {
       "path": "games/77790193039862.lua",
@@ -114,8 +114,8 @@
     },
     {
       "path": "games/universal.lua",
-      "bytes": 284208,
-      "sha256": "a739c5c6b9d6d42001071d0e337beb375f307260a022238b7b8a8e324eb45177"
+      "bytes": 292629,
+      "sha256": "17ec154b2223314497d3f79a9ea9ec191d79c765b8993d7b9b8f4fe6606ca1db"
     },
     {
       "path": "guis/new.lua",
@@ -129,8 +129,8 @@
     },
     {
       "path": "init.lua",
-      "bytes": 17407,
-      "sha256": "8eac414c9a79065268794629667c631ad406314163e92f0abccb0ad01c490836"
+      "bytes": 18175,
+      "sha256": "5469bcd98654ffb0a6059c60a2fc6e5ee7fbe612fbf456d963e5a5a279d7c4d5"
     },
     {
       "path": "libraries/badvape-theme.lua",
@@ -179,8 +179,8 @@
     },
     {
       "path": "main.lua",
-      "bytes": 8532,
-      "sha256": "8ddfa2007101fcd51d33d4a90c37866f4f1bf363635afe02ce64f67c61e994ee"
+      "bytes": 12202,
+      "sha256": "2f1a8f88f1624861df729178ca915686e2e1d7edcd655da4e8ef7e3924bc54be"
     },
     {
       "path": "os.luau",
@@ -189,18 +189,18 @@
     },
     {
       "path": "profiles/2619619496.gui.txt",
-      "bytes": 1439,
-      "sha256": "624d7a571b57ee22aafd957bd1966e9404cfbf9e8153423936d85a48ad08c5ed"
+      "bytes": 1480,
+      "sha256": "c140a768c804fd29edbf9014a2cf0a77ee5453985fde3b32d63c235d76ce858f"
     },
     {
       "path": "profiles/blatant6872265039.txt",
-      "bytes": 15355,
-      "sha256": "23bc2466963105b263d5b2636c15ddacf48304f3b5f2f60de5d4e212ff78d4d4"
+      "bytes": 15384,
+      "sha256": "a5c3d1cc785331eb1c30a952b8433f3914761d9422b8993499dc71c82344b85b"
     },
     {
       "path": "profiles/blatant6872274481.txt",
-      "bytes": 40544,
-      "sha256": "f942da4e65f61c7a6bb85b6e00e5f23cbeb67efd52a56f87d92cf8d880ade037"
+      "bytes": 41444,
+      "sha256": "b623d23181712dc75ba206e4627150f16d69df82b2f6e5646b17d6011b5b9901"
     },
     {
       "path": "profiles/default6872265039.txt",
@@ -209,8 +209,8 @@
     },
     {
       "path": "profiles/default6872274481.txt",
-      "bytes": 40470,
-      "sha256": "3d98107195354cc4bc7e3bdf4ed681547a5e833cd576828528e25aa2d6c558e8"
+      "bytes": 41418,
+      "sha256": "bc098f2edb45ffadaa786ee909ef5d23b3d8441abe175bcbf7fd054c209e7504"
     },
     {
       "path": "profiles/features.json",

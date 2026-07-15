@@ -36,27 +36,58 @@ local loadstring = function(...)
 	end
 	return res
 end
-local queueTeleport = queue_on_teleport
-    or queueonteleport
-    or (type(syn) == 'table' and syn.queue_on_teleport)
-    or (type(fluxus) == 'table' and fluxus.queue_on_teleport)
-    or runtimeEnvironment.queue_on_teleport
-local teleportQueueParts = shared.BadVapeTeleportQueueParts or {}
+local function addTeleportQueueCandidate(list, seen, candidate)
+	if type(candidate) == 'function' and not seen[candidate] then
+		seen[candidate] = true
+		table.insert(list, candidate)
+	end
+end
+local function teleportQueueCandidates()
+	local list, seen = {}, {}
+	local environmentSyn = type(runtimeEnvironment.syn) == 'table' and runtimeEnvironment.syn or nil
+	local environmentFluxus = type(runtimeEnvironment.fluxus) == 'table' and runtimeEnvironment.fluxus or nil
+	addTeleportQueueCandidate(list, seen, runtimeEnvironment.queue_on_teleport)
+	addTeleportQueueCandidate(list, seen, runtimeEnvironment.queueonteleport)
+	addTeleportQueueCandidate(list, seen, environmentSyn and environmentSyn.queue_on_teleport)
+	addTeleportQueueCandidate(list, seen, environmentSyn and environmentSyn.queueonteleport)
+	addTeleportQueueCandidate(list, seen, environmentFluxus and environmentFluxus.queue_on_teleport)
+	addTeleportQueueCandidate(list, seen, environmentFluxus and environmentFluxus.queueonteleport)
+	addTeleportQueueCandidate(list, seen, queue_on_teleport)
+	addTeleportQueueCandidate(list, seen, queueonteleport)
+	addTeleportQueueCandidate(list, seen, type(syn) == 'table' and syn.queue_on_teleport)
+	addTeleportQueueCandidate(list, seen, type(syn) == 'table' and syn.queueonteleport)
+	addTeleportQueueCandidate(list, seen, type(fluxus) == 'table' and fluxus.queue_on_teleport)
+	addTeleportQueueCandidate(list, seen, type(fluxus) == 'table' and fluxus.queueonteleport)
+	return list
+end
+local teleportQueueParts = {}
+local teleportQueueFlushed = false
 shared.BadVapeTeleportQueueParts = teleportQueueParts
-local function refreshTeleportQueue()
-    if type(queueTeleport) ~= 'function' then return false end
-    local names = {}
-    for name in teleportQueueParts do table.insert(names, name) end
-    table.sort(names)
-    local scripts = {}
-    for _, name in names do table.insert(scripts, teleportQueueParts[name]) end
-    return pcall(queueTeleport, table.concat(scripts, '\n'))
+local function flushTeleportQueue()
+	if teleportQueueFlushed then return true end
+	local names = {}
+	for name in teleportQueueParts do table.insert(names, name) end
+	table.sort(names)
+	local scripts = {}
+	for _, name in names do table.insert(scripts, teleportQueueParts[name]) end
+	if #scripts == 0 then return false end
+	local source = table.concat(scripts, '\n')
+	for _, queueTeleport in teleportQueueCandidates() do
+		local ok, result = pcall(queueTeleport, source)
+		if ok and result ~= false then
+			teleportQueueFlushed = true
+			return true
+		end
+	end
+	return false
 end
 shared.BadVapeQueueTeleport = function(name, source)
-    if type(name) ~= 'string' or type(source) ~= 'string' then return false end
-    teleportQueueParts[name] = source
-    return refreshTeleportQueue()
+	if type(name) ~= 'string' or name == '' or type(source) ~= 'string' or source == '' then return false end
+	if teleportQueueFlushed then return false end
+	teleportQueueParts[name] = source
+	return true
 end
+shared.BadVapeFlushTeleportQueue = flushTeleportQueue
 local isfile = isfile or function(file)
 	local suc, res = pcall(function()
 		return readfile(file)
@@ -179,17 +210,68 @@ local function finishLoading()
 
 	if not shared.VapeIndependent then
 		local teleportUid = tostring(license.Key or ''):lower()
-		if #teleportUid >= 3 and #teleportUid <= 24 and teleportUid:match('^%l[%w_]+$') then
-				local loaderUrl = httpService:JSONEncode('https://luvit.cc/badvape-api/loader')
-				local encodedUid = httpService:JSONEncode(teleportUid)
-				local teleportScript = 'shared.vapereload = true\n'
-					..'shared.BadVapeFolder = '..httpService:JSONEncode(runtimeFolder)..'\n'
-					..'loadstring(game:HttpGet('..loaderUrl..'))() { log { '..encodedUid..' } }'
-				if shared.VapeCustomProfile then
-					teleportScript = 'shared.VapeCustomProfile = '
-						..httpService:JSONEncode(tostring(shared.VapeCustomProfile))..'\n'..teleportScript
+		local function currentExecutorName()
+			local environment = type(runtimeEnvironment) == 'table' and runtimeEnvironment or {}
+			local identifiers, seen = {}, {}
+			local function addIdentifier(candidate)
+				if type(candidate) == 'function' and not seen[candidate] then
+					seen[candidate] = true
+					table.insert(identifiers, candidate)
 				end
-			shared.BadVapeQueueTeleport('00-loader', teleportScript)
+			end
+			addIdentifier(environment.identifyexecutor)
+			addIdentifier(environment.getexecutorname)
+			addIdentifier(identifyexecutor)
+			addIdentifier(getexecutorname)
+			for _, identify in identifiers do
+				local success, name = pcall(identify)
+				if success and type(name) == 'string' and name ~= '' then
+					return name
+				end
+			end
+			return ''
+		end
+		if #teleportUid >= 1 and #teleportUid <= 24 and teleportUid:match('^%l[%w_]*$') then
+			local encodedUid = httpService:JSONEncode(teleportUid)
+			local encodedFolder = httpService:JSONEncode(runtimeFolder)
+			local teleportScript
+			if shared.VapeDeveloper then
+				teleportScript = 'shared.vapereload = true\n'
+					..'shared.VapeDeveloper = true\n'
+					..'shared.BadVapeFolder = '..encodedFolder..'\n'
+					..'local badVapeLoader, badVapeLoadError = loadstring(readfile(shared.BadVapeFolder.."/loader.lua"), "@badvape/loader.lua")\n'
+					..'if type(badVapeLoader) ~= "function" then error(badVapeLoadError or "BadVape local loader rejected", 0) end\n'
+					..'return badVapeLoader({Key = '..encodedUid..'})'
+			else
+				local loaderUrl = httpService:JSONEncode('https://luvit.cc/badvape-api/loader')
+				teleportScript = 'shared.vapereload = true\n'
+					..'shared.BadVapeFolder = '..encodedFolder..'\n'
+					..'loadstring(game:HttpGet('..loaderUrl..'))() { log { '..encodedUid..' } }'
+			end
+			if shared.VapeCustomProfile then
+				teleportScript = 'shared.VapeCustomProfile = '
+					..httpService:JSONEncode(tostring(shared.VapeCustomProfile))..'\n'..teleportScript
+			end
+			if currentExecutorName():lower():find('potassium', 1, true) then
+				teleportScript = 'task.wait(12)\n'..teleportScript
+			end
+			shared.BadVapeQueueTeleport('99-loader', teleportScript)
+			local queueAttempted = false
+			vape:Clean(playersService.LocalPlayer.OnTeleport:Connect(function()
+				if queueAttempted then return end
+				queueAttempted = true
+				task.defer(function()
+					if not shared.BadVapeFlushTeleportQueue() then
+						queueAttempted = false
+						vape:CreateNotification('BadVape', 'Your executor could not queue the teleport reload.', 8, 'warning')
+					end
+				end)
+			end))
+			if #teleportQueueCandidates() == 0 then
+				vape:CreateNotification('BadVape', 'This executor does not support queue on teleport.', 8, 'warning')
+			end
+		elseif license.Key then
+			vape:CreateNotification('BadVape', 'Automatic teleport reload needs your UID. Run /setuid, then use /getscript.', 10, 'warning')
 		end
 	end
 

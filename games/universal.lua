@@ -79,12 +79,41 @@ local guiService = cloneref(game:GetService('GuiService'))
 local groupService = cloneref(game:GetService('GroupService'))
 local textChatService = cloneref(game:GetService('TextChatService'))
 local contextService = cloneref(game:GetService('ContextActionService'))
+
+local function serializeSessionInfo(objects)
+	local saved = {}
+	for name, object in objects do
+		if type(object) == 'table' and object.Saved then
+			saved[name] = {Saved = true, Value = object.Value}
+		end
+	end
+	local success, source = pcall(function()
+		local json = httpService:JSONEncode(saved)
+		return 'shared.vapesessioninfo = '..httpService:JSONEncode(json)
+	end)
+	return success and type(source) == 'string' and source or nil
+end
 local coreGui = game:GetService('CoreGui')
 
 local isnetworkowner = isnetworkowner or function() return true end
 local gameCamera = workspace.CurrentCamera or workspace:FindFirstChildWhichIsA('Camera')
 local lplr = playersService.LocalPlayer
 local assetfunction = getcustomasset
+
+local function isValidGroundRay(ray, humanoid)
+	if not ray or ray.Material == Enum.Material.Water
+		or humanoid and humanoid.FloorMaterial == Enum.Material.Water then
+		return false
+	end
+	local instance = ray.Instance
+	if instance then
+		local name = instance.Name:lower()
+		if name == 'water' or name:match('^water[%s_%-]') or name:match('[%s_%-]water$') then
+			return false
+		end
+	end
+	return true
+end
 
 local tween = vape.Libraries.tween
 local targetinfo = vape.Libraries.targetinfo
@@ -347,6 +376,60 @@ vape.Libraries.auraanims = {
 		},
 	},
 	Random = {},
+	['1.7 Autoblock'] = {
+		{CFrame = CFrame.new(-0.01, -3.51, -2.01) * CFrame.Angles(math.rad(-180), math.rad(85), math.rad(-180)), Time = 0},
+	},
+	Prism = {
+		{CFrame = CFrame.new(-0.01, 0.49, -1.51) * CFrame.Angles(math.rad(90), math.rad(45), math.rad(-90)), Time = 0},
+		{CFrame = CFrame.new(-0.01, 0.49, -1.51) * CFrame.Angles(math.rad(-51), math.rad(48), math.rad(24)), Time = 0.06},
+		{CFrame = CFrame.new(-0.01, 0.49, -1.51) * CFrame.Angles(math.rad(90), math.rad(45), math.rad(-90)), Time = 0.06},
+	},
+	Jerkin = {
+		{CFrame = CFrame.new(-1.5, 0.08, -1.01) * CFrame.Angles(0, 0, math.rad(90)), Time = 0},
+		{CFrame = CFrame.new(-1.51, 0.08, -2.51) * CFrame.Angles(0, 0, math.rad(90)), Time = 0.01},
+		{CFrame = CFrame.new(-1.51, 0.08, -0.01) * CFrame.Angles(0, 0, math.rad(90)), Time = 0.01},
+		{CFrame = CFrame.new(-1.5, 0.08, -1.01) * CFrame.Angles(0, 0, math.rad(90)), Time = 0.01},
+	},
+	Karambit = {
+		{CFrame = CFrame.new(-0.01, 0, -1.51) * CFrame.Angles(math.rad(-50), 0, 0), Time = 0},
+		{CFrame = CFrame.new(-0.01, -0.01, -1.51) * CFrame.Angles(math.rad(-155), 0, 0), Time = 0.03},
+		{CFrame = CFrame.new(-0.01, -0.01, -1.51) * CFrame.Angles(math.rad(120), 0, 0), Time = 0.03},
+		{CFrame = CFrame.new(-0.01, -0.01, -1.51) * CFrame.Angles(math.rad(30), 0, 0), Time = 0.03},
+		{CFrame = CFrame.new(-0.01, 0, -1.51) * CFrame.Angles(math.rad(-50), 0, 0), Time = 0.03},
+	},
+	Swank = {
+		{CFrame = CFrame.new(-0.01, 0, -1.51) * CFrame.Angles(0, math.rad(85), 0), Time = 0},
+		{CFrame = CFrame.new(-0.02, -0.01, -1.51) * CFrame.Angles(math.rad(59), math.rad(19), math.rad(-37)), Time = 0.03},
+		{CFrame = CFrame.new(-0.01, 0, -1.51) * CFrame.Angles(0, math.rad(85), 0), Time = 0.03},
+	},
+	Normal2 = {
+		{CFrame = CFrame.new(0.7, -0.4, 0.6) * CFrame.Angles(math.rad(280), math.rad(60), math.rad(280)), Time = 0.2},
+		{CFrame = CFrame.new(0.6, -0.4, 0.6) * CFrame.Angles(math.rad(200), math.rad(70), math.rad(10)), Time = 0.2},
+	},
+	Tweak = {
+		{CFrame = CFrame.new(0.7, -0.4, 0.6) * CFrame.Angles(math.rad(280), math.rad(60), math.rad(280)), Time = 0.1},
+		{CFrame = CFrame.new(0.6, -0.7, 0.6) * CFrame.Angles(math.rad(100), math.rad(70), math.rad(10)), Time = 0.4},
+	},
+	Xenex = {
+		{CFrame = CFrame.new(0.4, -2, 0) * CFrame.Angles(math.rad(200), math.rad(80), math.rad(200)), Time = 0.2},
+		{CFrame = CFrame.new(-0.2, -2, 0.6) * CFrame.Angles(math.rad(200), math.rad(80), math.rad(200)), Time = 0.2},
+	},
+	Woah = {
+		{CFrame = CFrame.new(0.4, -2, 0) * CFrame.Angles(math.rad(200), math.rad(70), math.rad(190)), Time = 0.2},
+		{CFrame = CFrame.new(-0.2, -2, 0.6) * CFrame.Angles(math.rad(200), math.rad(80), math.rad(3)), Time = 0.2},
+	},
+	Funny = {
+		{CFrame = CFrame.new(0.7, 0, 0.6) * CFrame.Angles(math.rad(280), math.rad(60), math.rad(280)), Time = 0.2},
+		{CFrame = CFrame.new(0.6, -0.2, 0.6) * CFrame.Angles(math.rad(200), math.rad(20), math.rad(10)), Time = 0.1},
+		{CFrame = CFrame.new(0.7, -0.4, 0.6) * CFrame.Angles(math.rad(220), math.rad(60), math.rad(280)), Time = 0.5},
+		{CFrame = CFrame.new(0.6, -0.6, 0.6) * CFrame.Angles(math.rad(200), math.rad(70), math.rad(10)), Time = 0.2},
+	},
+	ape = {
+		{CFrame = CFrame.new(0.69, -0.7, 0.6) * CFrame.Angles(math.rad(295), math.rad(55), math.rad(290)), Time = 0.15},
+		{CFrame = CFrame.new(0.69, -0.71, 0.6) * CFrame.Angles(math.rad(200), math.rad(60), math.rad(1)), Time = 0.15},
+		{CFrame = CFrame.new(0.69, -0.7, 0.6) * CFrame.Angles(math.rad(-30), math.rad(50), math.rad(-90)), Time = 0.15},
+		{CFrame = CFrame.new(0.7, -0.71, 0.59) * CFrame.Angles(math.rad(-84), math.rad(50), math.rad(-38)), Time = 0.2},
+	},
 	['Horizontal Spin'] = {
 		{ CFrame = CFrame.Angles(math.rad(-10), math.rad(-90), math.rad(-80)), Time = 0.12 },
 		{ CFrame = CFrame.Angles(math.rad(-10), math.rad(180), math.rad(-80)), Time = 0.12 },
@@ -1643,19 +1726,22 @@ run(function()
 				local teleportedServers
 				SessionInfo:Clean(playersService.LocalPlayer.OnTeleport:Connect(function()
 					if not teleportedServers then
-						teleportedServers = true
-						queueTeleportPart('30-session-info',
-							"shared.vapesessioninfo = '"
-								.. httpService:JSONEncode(vape.Libraries.sessioninfo.Objects)
-								.. "'"
-						)
+						local source = serializeSessionInfo(vape.Libraries.sessioninfo.Objects)
+						if source and queueTeleportPart('30-session-info', source) then
+							teleportedServers = true
+						end
 					end
 				end))
 
 				if shared.vapesessioninfo then
-					for i, v in httpService:JSONDecode(shared.vapesessioninfo) do
-						if vape.Libraries.sessioninfo.Objects[i] and v.Saved then
-							vape.Libraries.sessioninfo.Objects[i].Value = v.Value
+					local success, restored = pcall(function()
+						return httpService:JSONDecode(shared.vapesessioninfo)
+					end)
+					if success and type(restored) == 'table' then
+						for i, v in restored do
+							if type(v) == 'table' and vape.Libraries.sessioninfo.Objects[i] and v.Saved then
+								vape.Libraries.sessioninfo.Objects[i].Value = v.Value
+							end
 						end
 					end
 				end
@@ -2876,6 +2962,7 @@ run(function()
     local w, s, a, d, up, down = 0, 0, 0, 0, 0, 0
     local rayCheck = RaycastParams.new()
     rayCheck.RespectCanCollide = true
+    rayCheck.IgnoreWater = false
     Options.rayCheck = rayCheck
 
     local Functions
@@ -2902,8 +2989,8 @@ run(function()
     			rayCheck.FilterDescendantsInstances = { lplr.Character, gameCamera }
     			rayCheck.CollisionGroup = root.CollisionGroup
     			local ray = workspace:Raycast(root.Position, Vector3.new(0, YLevel - root.Position.Y, 0), rayCheck)
-    			if ray then
-    				YLevel = ray.Position.Y + entitylib.character.HipHeight
+			if ray then
+				YLevel = ray.Position.Y + entitylib.character.HipHeight
     			end
     		end
     		root.Velocity *= Vector3.new(1, 0, 1)
@@ -2928,7 +3015,7 @@ run(function()
     			rayCheck.FilterDescendantsInstances = { lplr.Character, gameCamera }
     			rayCheck.CollisionGroup = entitylib.character.RootPart.CollisionGroup
     			local ray = workspace:Raycast(entitylib.character.RootPart.Position, Vector3.new(0, -1000, 0), rayCheck)
-    			if ray then
+			if isValidGroundRay(ray, entitylib.character.Humanoid) then
     				YLevel = ray.Position.Y + entitylib.character.HipHeight
     			end
     		else
@@ -3350,17 +3437,52 @@ end)
 
 run(function()
     local InfiniteJump
+    local TPDown
     local Mode
+    local Hold
     local jumps = 0
 
-    InfiniteJump = vape.Categories.Blatant:CreateModule({
-    	Name = 'Infinite Jump',
-    	Tooltip = 'Allows you to jump infinitely.',
-    	Function = function(callback: boolean)
-    		if callback then
-    			jumps = 0
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.RespectCanCollide = true
+    rayParams.IgnoreWater = false
 
-    			InfiniteJump:Clean(inputService.JumpRequest:Connect(function()
+    local function namedModuleEnabled(name)
+        local module = vape.Modules and vape.Modules[name]
+        return module and module.Enabled or false
+    end
+
+    InfiniteJump = vape.Categories.Blatant:CreateModule({
+		Name = 'Infinite Jump',
+    	Tooltip = 'Allows you to jump infinitely.',
+		Function = function(callback: boolean)
+			if callback then
+				jumps = 0
+				local oldY
+				local jumpArmed = false
+
+				local function restoreHeight()
+					if not oldY then
+						return
+					end
+					if entitylib.isAlive then
+						local root = entitylib.character.RootPart
+						root.CFrame = CFrame.lookAlong(Vector3.new(root.Position.X, oldY, root.Position.Z), root.CFrame.LookVector)
+					end
+					oldY = nil
+				end
+
+				InfiniteJump:Clean(restoreHeight)
+				InfiniteJump:Clean(inputService.InputBegan:Connect(function(input)
+					if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA
+						or input.UserInputType == Enum.UserInputType.Touch then
+						jumpArmed = true
+					end
+				end))
+
+				InfiniteJump:Clean(inputService.JumpRequest:Connect(function()
+					if not entitylib.isAlive or (not jumpArmed and not Hold.Enabled) then return end
+					jumpArmed = false
     				jumps += 1
     				if jumps > 1 and Mode.Value == 'Velocity' then
     					local power = math.sqrt(2 * workspace.Gravity * entitylib.character.Humanoid.JumpHeight)
@@ -3371,10 +3493,42 @@ run(function()
     					)
     				elseif Mode.Value == 'Jump' then
     					entitylib.character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    				end
-    			end))
-    		end
-    	end,
+					end
+				end))
+
+				repeat
+					if oldY then
+						restoreHeight()
+						task.wait(0.1)
+					elseif entitylib.isAlive and TPDown.Enabled and entitylib.character.AirTime
+						and not namedModuleEnabled('Fly')
+						and not namedModuleEnabled('InfiniteFly')
+						and not namedModuleEnabled('Infinite Fly')
+						and not namedModuleEnabled('Long Jump')
+						and not namedModuleEnabled('LongJump')
+						and not namedModuleEnabled('TP Down') then
+						local root = entitylib.character.RootPart
+						if (tick() - entitylib.character.AirTime) > 1.7 then
+							rayParams.FilterDescendantsInstances = {lplr.Character, gameCamera}
+							rayParams.CollisionGroup = root.CollisionGroup
+							local ray = workspace:Raycast(root.Position, Vector3.new(0, -1000, 0), rayParams)
+							if isValidGroundRay(ray, entitylib.character.Humanoid) then
+								oldY = root.Position.Y
+								entitylib.character.Humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+								root.AssemblyLinearVelocity = Vector3.new(0, -2.5, 0)
+								root.CFrame = CFrame.lookAlong(
+									Vector3.new(root.Position.X, ray.Position.Y + (entitylib.character.HipHeight or 2.5), root.Position.Z),
+									root.CFrame.LookVector
+								)
+							end
+						end
+					end
+					task.wait(0.1)
+				until not InfiniteJump.Enabled
+
+				restoreHeight()
+			end
+		end,
     	ExtraText = function()
     		return Mode.Value
     	end,
@@ -3383,9 +3537,13 @@ run(function()
     	Name = 'Mode',
     	List = { 'Jump', 'Velocity' },
     })
-    InfiniteJump:CreateToggle({
-    	Name = 'TP Down',
-    })
+	Hold = InfiniteJump:CreateToggle({
+		Name = 'Hold',
+		Tooltip = 'Keep jumping while the jump button is held.\nOff = one jump per press.',
+	})
+	TPDown = InfiniteJump:CreateToggle({
+		Name = 'TP Down',
+	})
 end)
 
 run(function()
@@ -7705,33 +7863,72 @@ run(function()
 end)
 
 run(function()
-    local PromptDuration
-    local Duration
+	local FastInteraction
+	local Reduction
+	local pending = {}
+	local generation = 0
+	local firePrompt = type(runtimeEnvironment.fireproximityprompt) == 'function'
+		and runtimeEnvironment.fireproximityprompt
+		or fireproximityprompt
 
-    PromptDuration = vape.Categories.World:CreateModule({
-    	Name = 'Fast Interaction',
-    	Tooltip = 'Changes how fast ur interacting',
-    	Function = function(call)
-    		if call then
-    			PromptDuration:Clean(proximityPromptService.PromptButtonHoldBegan:Connect(function(prompt, player)
-    				if player == lplr and prompt.HoldDuration <= Duration.Value then
-    					task.delay(Duration.Value, fireproximityprompt, prompt)
-    				end
-    			end))
-    		end
-    	end,
-    })
+	local function cancelPrompt(prompt, player)
+		if player == lplr then
+			pending[prompt] = nil
+		end
+	end
 
-    Duration = PromptDuration:CreateSlider({
-    	Name = 'Duration',
-    	Min = 0,
-    	Max = 2,
-    	Default = 0,
-    	Suffix = function(val)
-    		return val > 1 and 'secs' or 'sec'
-    	end,
-    	Decimal = 100,
-    })
+	FastInteraction = vape.Categories.World:CreateModule({
+		Name = 'Fast Interaction',
+		Tooltip = 'Reduces how long proximity prompt interactions take.',
+		Function = function(call)
+			generation += 1
+			table.clear(pending)
+			if not call then return end
+
+			if type(firePrompt) ~= 'function' then
+				notif('Fast Interaction', 'Your executor does not support proximity prompt activation.', 8, 'warning')
+				task.defer(function()
+					if FastInteraction.Enabled then
+						FastInteraction:Toggle()
+					end
+				end)
+				return
+			end
+
+			local activeGeneration = generation
+			FastInteraction:Clean(proximityPromptService.PromptButtonHoldBegan:Connect(function(prompt, player)
+				if player ~= lplr or not prompt.Parent or prompt.HoldDuration <= 0 then return end
+
+				local token = {}
+				pending[prompt] = token
+				local delay = prompt.HoldDuration * (1 - (math.clamp(Reduction.Value, 0, 100) / 100))
+				task.delay(delay, function()
+					if not FastInteraction.Enabled
+						or generation ~= activeGeneration
+						or pending[prompt] ~= token
+						or not prompt.Parent then
+						return
+					end
+
+					pending[prompt] = nil
+					local success = pcall(firePrompt, prompt)
+					if not success then
+						notif('Fast Interaction', 'This prompt could not be activated by your executor.', 5, 'warning')
+					end
+				end)
+			end))
+			FastInteraction:Clean(proximityPromptService.PromptButtonHoldEnded:Connect(cancelPrompt))
+			FastInteraction:Clean(proximityPromptService.PromptTriggered:Connect(cancelPrompt))
+		end,
+	})
+
+	Reduction = FastInteraction:CreateSlider({
+		Name = 'Reduction',
+		Min = 1,
+		Max = 100,
+		Default = 20,
+		Suffix = '%',
+	})
 end)
 
 run(function()

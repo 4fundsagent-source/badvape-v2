@@ -21,6 +21,7 @@ local folder = shared.BadVapeFolder or 'badvape'
 local revisionPath = folder..'/cache/public-revision.txt'
 local fileIndexPath = folder..'/cache/public-file-index.txt'
 local profileSeedPath = folder..'/cache/profile-seed-v1.txt'
+local profileOverridePath = folder..'/cache/profile-reset-20260715-v1.txt'
 local releaseRefPath = folder..'/cache/public-release-ref.txt'
 
 shared.BadVapeFolder = folder
@@ -165,6 +166,12 @@ local seedProfilePaths = {
 	['profiles/default6872265039.txt'] = true,
 	['profiles/default6872274481.txt'] = true,
 	['profiles/gui.txt'] = true,
+}
+local releaseProfileOverridePaths = {
+	['profiles/2619619496.gui.txt'] = true,
+	['profiles/blatant6872265039.txt'] = true,
+	['profiles/blatant6872274481.txt'] = true,
+	['profiles/default6872274481.txt'] = true,
 }
 local retiredRuntimePaths = {
 	['games/131823264266369.lua'] = true,
@@ -500,6 +507,7 @@ end
 if manifest then
 	local previousIndex, hasPreviousIndex = readCachedFileIndex()
 	local profileSeeded = safeIsFile(profileSeedPath)
+	local forceProfileOverride = not safeIsFile(profileOverridePath)
 	local requiredPaths = requiredPublicPaths(manifest)
 	local nextIndex = copyFileIndex(previousIndex)
 	local manifestPaths = {}
@@ -509,7 +517,10 @@ if manifest then
 		if requiredPaths[entry.path] then
 			local localPath = folder..'/'..entry.path
 			local seedProfile = seedProfilePaths[entry.path] == true
-			local needsDownload = not safeIsFile(localPath) or (seedProfile and not profileSeeded)
+			local releaseProfile = releaseProfileOverridePaths[entry.path] == true
+			local needsDownload = not safeIsFile(localPath)
+				or (seedProfile and not profileSeeded)
+				or (releaseProfile and forceProfileOverride)
 			if not needsDownload and not seedProfile then
 				local ok, cached = pcall(readfile, localPath)
 				needsDownload = not ok or not contentMatches(entry, cached)
@@ -525,6 +536,13 @@ if manifest then
 				table.insert(pending, {entry = entry, localPath = localPath})
 			else
 				nextIndex[entry.path] = {bytes = entry.bytes, sha256 = entry.sha256}
+			end
+		end
+	end
+	if forceProfileOverride then
+		for path in releaseProfileOverridePaths do
+			if not manifestPaths[path] then
+				error('profile override manifest missing required file: '..path, 0)
 			end
 		end
 	end
@@ -599,6 +617,9 @@ if manifest then
 		writefile(releaseRefPath, releaseRef)
 	end
 	writefile(profileSeedPath, manifest.revision)
+	if forceProfileOverride then
+		writefile(profileOverridePath, manifest.revision)
+	end
 	-- Fallback downloads use this branch; user profile/config files remain untouched.
 	writefile(folder..'/profiles/commit.txt', branch)
 elseif not safeIsFile(folder..'/os.luau') then
