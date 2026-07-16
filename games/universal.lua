@@ -3460,6 +3460,7 @@ run(function()
 				jumps = 0
 				local oldY
 				local jumpArmed = false
+				local held = false
 
 				local function restoreHeight()
 					if not oldY then
@@ -3474,11 +3475,28 @@ run(function()
 
 				InfiniteJump:Clean(restoreHeight)
 				InfiniteJump:Clean(inputService.InputBegan:Connect(function(input)
-					if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA
-						or input.UserInputType == Enum.UserInputType.Touch then
+					if not inputService:GetFocusedTextBox()
+						and (input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA)
+						and not held then
+						held = true
 						jumpArmed = true
 					end
 				end))
+				InfiniteJump:Clean(inputService.InputEnded:Connect(function(input)
+					if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA then
+						held = false
+					end
+				end))
+				if inputService.TouchEnabled then
+					pcall(function()
+						local jumpButton = lplr.PlayerGui.TouchGui.TouchControlFrame.JumpButton
+						InfiniteJump:Clean(jumpButton.InputBegan:Connect(function(input)
+							if input.UserInputType == Enum.UserInputType.Touch then
+								jumpArmed = true
+							end
+						end))
+					end)
+				end
 
 				InfiniteJump:Clean(inputService.JumpRequest:Connect(function()
 					if not entitylib.isAlive or (not jumpArmed and not Hold.Enabled) then return end

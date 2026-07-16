@@ -26,15 +26,36 @@ if type(forwardedLicense) == 'table' then
 end
 license.Key = type(license.Key) == 'string' and license.Key or nil
 repeat task.wait() until game:IsLoaded()
-if shared.vape then shared.vape:Uninject() end
+local staleVape = shared.vape
+if type(staleVape) == 'table' and type(staleVape.Uninject) == 'function' then
+	pcall(staleVape.Uninject, staleVape)
+end
+if shared.vape == staleVape then
+	shared.vape = nil
+end
 
 local vape
-local loadstring = function(...)
-	local res, err = loadstring(...)
+local nativeLoadstring = loadstring
+local loadstring = function(source, chunkName)
+	local res, err = nativeLoadstring(source, chunkName)
 	if err and vape then
-		vape:CreateNotification('BadVape', 'Failed to load : '..err, 30, 'alert')
+		vape:CreateNotification('BadVape', 'Failed to compile '..tostring(chunkName)..' : '..tostring(err), 30, 'alert')
 	end
-	return res
+	return res, err
+end
+local function runSource(source, chunkName, ...)
+	if type(source) ~= 'string' or source == '' then
+		return false, tostring(chunkName)..' source unavailable'
+	end
+	local chunk, compileError = loadstring(source, chunkName)
+	if type(chunk) ~= 'function' then
+		return false, tostring(chunkName)..' compile failed: '..tostring(compileError or 'rejected')
+	end
+	local result = table.pack(pcall(chunk, ...))
+	if not result[1] then
+		return false, tostring(chunkName)..' runtime failed: '..tostring(result[2])
+	end
+	return true, result[2]
 end
 local function addTeleportQueueCandidate(list, seen, candidate)
 	if type(candidate) == 'function' and not seen[candidate] then
@@ -194,16 +215,23 @@ local function loadMaxPrediction()
 	vape.Libraries = vape.Libraries or {}
 	shared.BadVapePredictionMode = 'max-devirtualized'
 	vape.Libraries.calculatePosition = function(selfPosition, rootPart)
-		return CFrame.lookAt(rootPart.Position, selfPosition).LookVector * math.max((selfPosition - rootPart.Position).Magnitude / 10, 0)
+		local targetPosition = rootPart and rootPart.Position
+		if typeof(selfPosition) ~= 'Vector3' or typeof(targetPosition) ~= 'Vector3' then
+			return Vector3.zero
+		end
+		return CFrame.lookAt(targetPosition, selfPosition).LookVector * math.max((selfPosition - targetPosition).Magnitude / 10, 0)
 	end
 end
 
 local function finishLoading()
 	vape.Init = nil
-	vape:Load()
+	local loaded, loadError = pcall(vape.Load, vape)
+	if not loaded then
+		error('BadVape GUI load failed: '..tostring(loadError), 0)
+	end
 	task.spawn(function()
 		repeat
-			vape:Save()
+			pcall(vape.Save, vape)
 			task.wait(10)
 		until not vape.Loaded
 	end)
@@ -294,21 +322,62 @@ end
 if not isfile('badvape/profiles/gui.txt') then
 	writefile('badvape/profiles/gui.txt', 'new')
 end
-local gui = readfile('badvape/profiles/gui.txt')
+local gui = readCachedFile('badvape/profiles/gui.txt') or 'new'
 if gui == 'rise' then
 	gui = 'new'
 	writefile('badvape/profiles/gui.txt', gui)
 end
-
-if not isfolder('badvape/assets/'..gui) then
-	makefolder('badvape/assets/'..gui)
+if gui ~= 'new' and gui ~= 'old' then
+	gui = 'new'
+	writefile('badvape/profiles/gui.txt', gui)
 end
 if not isfile('badvape/profiles/commit.txt') then
 	writefile('badvape/profiles/commit.txt', 'main')
 end
 
-runtimeEnvironment.used_init = true
-vape = loadstring(downloadFile('badvape/guis/'..gui..'.lua'), 'gui')(license)
+pcall(function()
+	runtimeEnvironment.used_init = true
+end)
+
+local function loadGuiCandidate(name)
+	local path = 'badvape/guis/'..name..'.lua'
+	if not isfolder('badvape/assets/'..name) then
+		makefolder('badvape/assets/'..name)
+	end
+	local sourceOk, source = pcall(downloadFile, path)
+	if not sourceOk then
+		return nil, path..' download failed: '..tostring(source)
+	end
+	local success, result = runSource(source, path, license)
+	if not success then return nil, result end
+	if type(result) ~= 'table' or type(result.Load) ~= 'function'
+		or type(result.Save) ~= 'function' or type(result.CreateNotification) ~= 'function' then
+		return nil, path..' returned an invalid GUI object'
+	end
+	return result
+end
+
+local guiError
+vape, guiError = loadGuiCandidate(gui)
+local guiFallbackReason
+if not vape and gui ~= 'old' then
+	guiFallbackReason = guiError
+	local fallbackError
+	vape, fallbackError = loadGuiCandidate('old')
+	if vape then
+		gui = 'old'
+		pcall(writefile, 'badvape/profiles/gui.txt', gui)
+	else
+		guiError = tostring(guiError)..' | '..tostring(fallbackError)
+	end
+end
+if not vape then
+	error('BadVape GUI unavailable: '..tostring(guiError), 0)
+end
+
+if not isfolder('badvape/assets/'..gui) then
+	makefolder('badvape/assets/'..gui)
+end
 vape.Place = game.PlaceId
 _G.vape = vape
 shared.vape = vape
@@ -323,6 +392,9 @@ if type(previousUninject) == 'function' then
 end
 loadMaxPrediction()
 loadBadVapeTheme()
+if guiFallbackReason then
+	vape:CreateNotification('BadVape', 'The selected GUI failed, so compatibility mode was loaded: '..tostring(guiFallbackReason), 12, 'warning')
+end
 
 if shared.maincat then
 	redirect()
@@ -339,20 +411,25 @@ local function loadGameModule(placeId)
 		return false
 	end
 
-	local gameChunk = loadstring(gameSource, tostring(placeId))
-	if type(gameChunk) ~= 'function' then
-		return false
-	end
-	local ok, loaded = pcall(gameChunk, license)
+	local ok, loaded = runSource(gameSource, tostring(placeId), license)
 	if not ok or loaded == false then
-		vape:CreateNotification('BadVape', 'Game module unavailable; loaded base modules only.', 8, 'warning')
+		local detail = not ok and tostring(loaded):sub(1, 240) or 'module returned false'
+		vape:CreateNotification('BadVape', 'Game module unavailable; loaded base modules only. '..detail, 10, 'warning')
 		return false
 	end
 	return true
 end
 
 if not shared.VapeIndependent then
-	loadstring(downloadFile('badvape/games/universal.lua'), 'universal')(license)
+	local universalPath = 'badvape/games/universal.lua'
+	local universalSourceOk, universalSource = pcall(downloadFile, universalPath)
+	local universalOk, universalError = false, universalSource
+	if universalSourceOk then
+		universalOk, universalError = runSource(universalSource, universalPath, license)
+	end
+	if not universalOk then
+		vape:CreateNotification('BadVape', 'Base modules failed to load: '..tostring(universalError):sub(1, 240), 12, 'alert')
+	end
 	loadGameModule(game.PlaceId)
 	loadBadVapeTheme()
 	finishLoading()

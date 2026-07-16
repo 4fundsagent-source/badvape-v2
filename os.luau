@@ -431,13 +431,13 @@ local mainPath = folder..'/main.lua'
 if not safeIsFile(mainPath) then
 	error('Missing local BadVape entrypoint', 0)
 end
-local mainChunk = loadstring(readfile(mainPath), 'badvape/main.lua')
+local mainChunk, mainLoadError = loadstring(readfile(mainPath), 'badvape/main.lua')
 if not mainChunk then
-	error('BadVape entrypoint rejected', 0)
+	error('BadVape entrypoint rejected: '..tostring(mainLoadError), 0)
 end
 
 local mainOk, mainResult = pcall(mainChunk, license)
 if not mainOk then
-	error('BadVape entrypoint failed', 0)
+	error('BadVape entrypoint failed: '..tostring(mainResult), 0)
 end
 return mainResult

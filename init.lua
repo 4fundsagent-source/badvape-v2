@@ -603,6 +603,10 @@ if manifest then
 	for index, pendingFile in ipairs(pending) do
 		ensureParent(pendingFile.localPath)
 		writefile(pendingFile.localPath, downloaded[index])
+		local readOk, installed = pcall(readfile, pendingFile.localPath)
+		if not readOk or not contentMatches(pendingFile.entry, installed) then
+			error('failed to verify installed public runtime file: '..pendingFile.entry.path, 0)
+		end
 		nextIndex[pendingFile.entry.path] = {
 			bytes = pendingFile.entry.bytes,
 			sha256 = pendingFile.entry.sha256,
