@@ -7,24 +7,180 @@ local httpService = game:GetService('HttpService')
 local owner = '4fundsagent-source'
 local repo = 'badvape-v2'
 local branch = 'main'
+local folder = shared.BadVapeFolder or 'badvape'
+local diagnosticsPath = folder..'/badvape-debug.txt'
+
+-- Keep one self-contained report in the workspace. It deliberately excludes
+-- credentials, device identifiers, auth tokens, request headers and contents.
+local diagnosticLines = {
+	'BadVape diagnostics v1',
+	'privacy=credentials, device identifiers, auth tokens, headers and file contents are not recorded',
+}
+local diagnosticStarted = type(os) == 'table' and type(os.clock) == 'function' and os.clock() or 0
+local forwardedSecret = type(forwardedLicense) == 'table' and forwardedLicense.Key
+forwardedSecret = type(forwardedSecret) == 'string' and forwardedSecret or nil
+
+local function replacePlain(value, needle, replacement)
+	if type(value) ~= 'string' or type(needle) ~= 'string' or needle == '' then
+		return value
+	end
+	local result, cursor = {}, 1
+	while true do
+		local first, last = value:find(needle, cursor, true)
+		if not first then
+			table.insert(result, value:sub(cursor))
+			break
+		end
+		table.insert(result, value:sub(cursor, first - 1))
+		table.insert(result, replacement)
+		cursor = last + 1
+	end
+	return table.concat(result)
+end
+
+local function diagnosticValue(value)
+	value = tostring(value)
+	if forwardedSecret and forwardedSecret ~= '' then
+		value = replacePlain(value, forwardedSecret, '<credential-redacted>')
+	end
+	value = value:gsub('BV%-%u%-[%w]+', '<license-redacted>')
+	value = value:gsub("([\"']?[Kk][Ee][Yy][\"']?%s*[:=]%s*[\"']?)[^%s,;\"'}]+", '%1<redacted>')
+	value = value:gsub("([\"']?[Uu][Ii][Dd][\"']?%s*[:=]%s*[\"']?)[^%s,;\"'}]+", '%1<redacted>')
+	value = value:gsub("([\"']?[Hh][Ww][Ii][Dd][\"']?%s*[:=]%s*[\"']?)[^%s,;\"'}]+", '%1<redacted>')
+	value = value:gsub("([\"']?[Aa]uthorization[\"']?%s*[:=]%s*[\"']?)[^,;\"'}]+", '%1<redacted>')
+	value = value:gsub("([\"']?[Tt]oken[\"']?%s*[:=]%s*[\"']?)[^%s,;\"'}]+", '%1<redacted>')
+	value = value:gsub("([\"']?[Ff]ingerprint[\"']?%s*[:=]%s*[\"']?)[^%s,;\"'}]+", '%1<redacted>')
+	value = value:gsub('[\r\n\t%z]', ' '):gsub('%s+', ' ')
+	return value:sub(1, 2000)
+end
+
+local function flushDiagnostics()
+	pcall(function()
+		if not isfolder(folder) then makefolder(folder) end
+		writefile(diagnosticsPath, table.concat(diagnosticLines, '\n')..'\n')
+	end)
+end
+
+local diagnostics = {path = diagnosticsPath}
+function diagnostics.record(event, fields)
+	local parts = {string.format('%04d', #diagnosticLines - 1), 'event='..diagnosticValue(event)}
+	local elapsed = type(os) == 'table' and type(os.clock) == 'function' and os.clock() - diagnosticStarted or 0
+	table.insert(parts, string.format('elapsed=%.3f', elapsed))
+	local keys = {}
+	for key in type(fields) == 'table' and fields or {} do
+		table.insert(keys, tostring(key))
+	end
+	table.sort(keys)
+	for _, key in ipairs(keys) do
+		table.insert(parts, diagnosticValue(key)..'='..diagnosticValue(fields[key]))
+	end
+	table.insert(diagnosticLines, table.concat(parts, '\t'))
+	flushDiagnostics()
+end
+diagnostics.redact = diagnosticValue
+shared.BadVapeDiagnostics = diagnostics
+flushDiagnostics()
+
 local pinnedReleaseRef
 if shared.BadVapeReleaseRef ~= nil then
 	if type(shared.BadVapeReleaseRef) ~= 'string'
 		or not shared.BadVapeReleaseRef:match('^[0-9a-f]+$')
 		or #shared.BadVapeReleaseRef ~= 40 then
+		diagnostics.record('installer_invalid_release_ref')
 		error('invalid BadVape release ref', 0)
 	end
 	pinnedReleaseRef = shared.BadVapeReleaseRef
 	branch = pinnedReleaseRef
 end
-local folder = shared.BadVapeFolder or 'badvape'
 local revisionPath = folder..'/cache/public-revision.txt'
 local fileIndexPath = folder..'/cache/public-file-index.txt'
 local profileSeedPath = folder..'/cache/profile-seed-v1.txt'
 local profileOverridePath = folder..'/cache/profile-reset-20260715-v1.txt'
 local releaseRefPath = folder..'/cache/public-release-ref.txt'
+local runtimeRepairPath = folder..'/cache/runtime-repair-20260716-v1.txt'
 
 shared.BadVapeFolder = folder
+
+local function identifyExecutor()
+	local candidates = {identifyexecutor, getexecutorname}
+	if type(getgenv) == 'function' then
+		local ok, environment = pcall(getgenv)
+		if ok and type(environment) == 'table' then
+			table.insert(candidates, 1, environment.getexecutorname)
+			table.insert(candidates, 1, environment.identifyexecutor)
+		end
+	end
+	for _, candidate in ipairs(candidates) do
+		if type(candidate) == 'function' then
+			local ok, name = pcall(candidate)
+			if ok and type(name) == 'string' and name ~= '' then return name end
+		end
+	end
+	return 'unknown'
+end
+
+diagnostics.record('installer_start', {
+	credentialKind = forwardedSecret and (forwardedSecret:match('^BV%-%u%-') and 'license' or 'uid') or 'missing',
+	executor = identifyExecutor(),
+	folder = folder,
+	gameId = game.GameId,
+	pinned = pinnedReleaseRef ~= nil,
+	placeId = game.PlaceId,
+})
+local capabilityEnvironment = {}
+if type(getgenv) == 'function' then
+	local ok, environment = pcall(getgenv)
+	if ok and type(environment) == 'table' then capabilityEnvironment = environment end
+end
+local capabilitySyn = type(capabilityEnvironment.syn) == 'table' and capabilityEnvironment.syn
+	or type(syn) == 'table' and syn or nil
+local capabilityFluxus = type(capabilityEnvironment.fluxus) == 'table' and capabilityEnvironment.fluxus
+	or type(fluxus) == 'table' and fluxus or nil
+local capabilityKrnl = type(capabilityEnvironment.krnl) == 'table' and capabilityEnvironment.krnl
+	or type(krnl) == 'table' and krnl or nil
+local capabilityCrypt = type(capabilityEnvironment.crypt) == 'table' and capabilityEnvironment.crypt
+	or type(crypt) == 'table' and crypt or nil
+local capabilityCrypto = type(capabilityEnvironment.crypto) == 'table' and capabilityEnvironment.crypto
+	or type(crypto) == 'table' and crypto or nil
+local requestDirect = type(capabilityEnvironment.request) == 'function'
+	or type(capabilityEnvironment.http_request) == 'function'
+	or type(request) == 'function'
+	or type(http_request) == 'function'
+local requestSyn = capabilitySyn and type(capabilitySyn.request) == 'function' or false
+local requestFluxus = capabilityFluxus and type(capabilityFluxus.request) == 'function' or false
+local requestKrnl = capabilityKrnl and type(capabilityKrnl.request) == 'function' or false
+diagnostics.record('executor_capabilities', {
+	bit32 = type(bit32) == 'table',
+	buffer = type(buffer) == 'table',
+	cloneref = type(cloneref) == 'function',
+	cryptHash = capabilityCrypt and type(capabilityCrypt.hash) == 'function' or false,
+	cryptoHash = capabilityCrypto and type(capabilityCrypto.hash) == 'function' or false,
+	debugTraceback = type(debug) == 'table' and type(debug.traceback) == 'function',
+	delfile = type(delfile) == 'function',
+	getcustomasset = type(getcustomasset) == 'function',
+	getgenv = type(getgenv) == 'function',
+	gethwid = type(capabilityEnvironment.gethwid) == 'function'
+		or type(capabilityEnvironment.get_hwid) == 'function'
+		or type(gethwid) == 'function'
+		or type(get_hwid) == 'function',
+	httpGet = type(game.HttpGet) == 'function',
+	isfile = type(isfile) == 'function',
+	isfolder = type(isfolder) == 'function',
+	listfiles = type(listfiles) == 'function',
+	loadstring = type(loadstring) == 'function',
+	makefolder = type(makefolder) == 'function',
+	readfile = type(readfile) == 'function',
+	request = requestDirect or requestSyn or requestFluxus or requestKrnl,
+	requestDirect = requestDirect,
+	requestFluxus = requestFluxus,
+	requestKrnl = requestKrnl,
+	requestSyn = requestSyn,
+	synCryptHash = capabilitySyn and type(capabilitySyn.crypt) == 'table'
+		and type(capabilitySyn.crypt.hash) == 'function' or false,
+	taskSpawn = type(task) == 'table' and type(task.spawn) == 'function',
+	taskWait = type(task) == 'table' and type(task.wait) == 'function',
+	writefile = type(writefile) == 'function',
+})
 
 local function safeIsFile(path)
 	if isfile then
@@ -52,16 +208,39 @@ end
 local function runCachedRuntime()
 	local osPath = folder..'/os.luau'
 	if not safeIsFile(osPath) then
+		diagnostics.record('runtime_missing', {path = osPath})
 		error('missing cached BadVape runtime', 0)
 	end
-	local osChunk, loadError = loadstring(readfile(osPath), folder..'/os.luau')
+	local readOk, osSource = pcall(readfile, osPath)
+	if not readOk or type(osSource) ~= 'string' or osSource == '' then
+		diagnostics.record('runtime_read_failed', {error = osSource, path = osPath})
+		error('failed to read cached BadVape runtime', 0)
+	end
+	diagnostics.record('runtime_compile_start', {bytes = #osSource, path = osPath})
+	local osChunk, loadError = loadstring(osSource, folder..'/os.luau')
 	if type(osChunk) ~= 'function' then
+		diagnostics.record('runtime_compile_failed', {error = loadError or 'rejected', path = osPath})
 		error(loadError or 'BadVape runtime rejected', 0)
 	end
-	return osChunk(forwardedLicense)
+	local function traceError(value)
+		if type(debug) == 'table' and type(debug.traceback) == 'function' then
+			local ok, trace = pcall(debug.traceback, tostring(value), 2)
+			if ok and type(trace) == 'string' then return trace end
+		end
+		return tostring(value)
+	end
+	local runtimeResult = table.pack(xpcall(function()
+		return osChunk(forwardedLicense)
+	end, traceError))
+	if not runtimeResult[1] then
+		diagnostics.record('runtime_execution_failed', {error = runtimeResult[2], path = osPath})
+		error(runtimeResult[2], 0)
+	end
+	diagnostics.record('runtime_execution_complete', {path = osPath, resultType = typeof(runtimeResult[2])})
+	return table.unpack(runtimeResult, 2, runtimeResult.n)
 end
 
-local localWorkspace = shared.VapeDeveloper == true and safeIsFile(folder..'/os.luau')
+local localWorkspace = shared.BadVapeDeveloper == true and safeIsFile(folder..'/os.luau')
 if not localWorkspace and safeIsFile(folder..'/profiles/commit.txt') then
 	local markerOk, marker = pcall(readfile, folder..'/profiles/commit.txt')
 	localWorkspace = markerOk
@@ -69,13 +248,14 @@ if not localWorkspace and safeIsFile(folder..'/profiles/commit.txt') then
 		and marker:match('^%s*(.-)%s*$') == 'local'
 end
 if localWorkspace then
+	diagnostics.record('installer_local_workspace', {folder = folder})
 	return runCachedRuntime()
 end
-if shared.VapeDeveloper == true then
-	shared.VapeDeveloper = nil
+if shared.BadVapeDeveloper == true then
+	shared.BadVapeDeveloper = nil
 end
 
-local releaseRef
+local releaseRef, releaseStrategy
 for attempt = 1, 3 do
 	local refOk, refBody = pcall(game.HttpGet, game,
 		'https://api.github.com/repos/'..owner..'/'..repo..'/commits/'..branch, true)
@@ -87,38 +267,51 @@ for attempt = 1, 3 do
 			and #refData.sha == 40
 			and (not pinnedReleaseRef or refData.sha == pinnedReleaseRef) then
 			releaseRef = refData.sha
+			releaseStrategy = 'github_api'
+			diagnostics.record('release_lookup_succeeded', {attempt = attempt, releaseRef = releaseRef})
 			break
 		end
+		diagnostics.record('release_lookup_failed', {
+			attempt = attempt,
+			error = decodeOk and 'invalid commit response' or refData,
+		})
+	else
+		diagnostics.record('release_lookup_failed', {attempt = attempt, error = refBody})
 	end
 	if attempt < 3 and type(task) == 'table' and type(task.wait) == 'function' then
 		task.wait(0.25 * attempt)
 	end
 end
-if not releaseRef and safeIsFile(releaseRefPath) then
+local cachedReleaseRef
+if safeIsFile(releaseRefPath) then
 	local ok, cachedRef = pcall(readfile, releaseRefPath)
 	if ok and type(cachedRef) == 'string'
-		and cachedRef:match('^[0-9a-f]+$') and #cachedRef == 40
-		and (not pinnedReleaseRef or cachedRef == pinnedReleaseRef) then
-		releaseRef = cachedRef
+		and cachedRef:match('^[0-9a-f]+$') and #cachedRef == 40 then
+		cachedReleaseRef = cachedRef
 	end
+end
+diagnostics.record('release_cache_state', {cachedRef = cachedReleaseRef or 'none'})
+if not releaseRef and pinnedReleaseRef and cachedReleaseRef == pinnedReleaseRef then
+	releaseRef = cachedReleaseRef
+	releaseStrategy = 'matching_pinned_cache'
 end
 if not releaseRef then
-	if safeIsFile(folder..'/os.luau') then
-		if pinnedReleaseRef then
-			local cachedRefOk, cachedRef = pcall(readfile, releaseRefPath)
-			if not cachedRefOk or cachedRef ~= pinnedReleaseRef then
-				error('pinned BadVape cache mismatch', 0)
-			end
-		end
-		warn('BadVape release lookup failed; using the cached public runtime.')
-		return runCachedRuntime()
+	if pinnedReleaseRef and safeIsFile(folder..'/os.luau')
+		and cachedReleaseRef ~= pinnedReleaseRef then
+		diagnostics.record('pinned_cache_mismatch', {
+			cachedRef = cachedReleaseRef or 'none',
+			requestedRef = pinnedReleaseRef,
+		})
+		error('pinned BadVape cache mismatch', 0)
 	end
 	-- GitHub's unauthenticated commit API can be rate-limited even while raw
-	-- content remains healthy. Fresh installs may use the branch as a last
-	-- resort; the manifest and per-file validation still fail atomically if a
-	-- branch update is observed halfway through the download.
+	-- content remains healthy. Both fresh and existing installs must try the
+	-- branch here; selecting an old cached ref would strand existing folders on
+	-- a stale game module while clean folders update correctly.
 	releaseRef = branch
+	releaseStrategy = pinnedReleaseRef and 'pinned_direct' or 'branch_fallback'
 end
+diagnostics.record('release_selected', {releaseRef = releaseRef, strategy = releaseStrategy})
 local baseUrls = {
 	'https://raw.githubusercontent.com/'..owner..'/'..repo..'/'..releaseRef..'/',
 	'https://cdn.jsdelivr.net/gh/'..owner..'/'..repo..'@'..releaseRef..'/',
@@ -335,19 +528,47 @@ end
 
 local function fetch(url)
 	local ok, body = pcall(game.HttpGet, game, url, true)
-	if not ok or type(body) ~= 'string' or body == '' or body == '404: Not Found' then
-		return nil
+	if not ok then
+		return nil, body
+	end
+	if type(body) ~= 'string' then
+		return nil, 'response type '..typeof(body)
+	end
+	if body == '' then
+		return nil, 'empty response'
+	end
+	if body == '404: Not Found' then
+		return nil, '404 response'
 	end
 	return body
 end
 
 local function fetchPath(path, validator)
 	for attempt = 1, 4 do
-		for _, baseUrl in ipairs(baseUrls) do
-			local contents = fetch(baseUrl..path)
-			if contents and (not validator or validator(contents)) then
+		for mirror, baseUrl in ipairs(baseUrls) do
+			local contents, fetchError = fetch(baseUrl..path)
+			local validatorOk, accepted = true, true
+			if contents and validator then
+				validatorOk, accepted = pcall(validator, contents)
+			end
+			if contents and validatorOk and accepted then
+				diagnostics.record('download_succeeded', {
+					attempt = attempt,
+					bytes = #contents,
+					mirror = mirror,
+					path = path,
+					releaseRef = releaseRef,
+				})
 				return contents
 			end
+			diagnostics.record('download_failed', {
+				attempt = attempt,
+				bytes = contents and #contents or 0,
+				error = fetchError or (validatorOk and 'content validation rejected' or accepted),
+				mirror = mirror,
+				path = path,
+				releaseRef = releaseRef,
+			})
 		end
 		if attempt < 4 and type(task) == 'table' and type(task.wait) == 'function' then
 			task.wait(0.25 * attempt)
@@ -404,6 +625,11 @@ local function findNativeSha256()
 end
 
 local hashCandidate, hashOwner, hashMode, hashUseOwner = findNativeSha256()
+diagnostics.record('hash_capability', {
+	available = hashCandidate ~= nil,
+	mode = hashCandidate and hashMode or 'size-only',
+	usesOwner = hashCandidate and hashUseOwner or false,
+})
 local function contentMatches(entry, contents)
 	if type(contents) ~= 'string' or #contents ~= entry.bytes then
 		return false
@@ -413,6 +639,41 @@ local function contentMatches(entry, contents)
 		return ok and validDigest(digest) and digest:lower() == entry.sha256
 	end
 	return true
+end
+
+function diagnostics.fileState(relativePath, entry, state)
+	relativePath = relativePath:gsub('\\', '/')
+	local path
+	if relativePath:sub(1, #folder + 1) == folder..'/' then
+		path = relativePath
+	else
+		relativePath = relativePath:gsub('^badvape/', '', 1)
+		path = folder..'/'..relativePath
+	end
+	local exists = safeIsFile(path)
+	local fields = {
+		exists = exists,
+		expectedBytes = entry and entry.bytes or 'unknown',
+		expectedSha256 = entry and entry.sha256 or 'unknown',
+		path = path,
+		state = state or 'observed',
+		validation = hashCandidate and 'sha256+size' or 'size-only',
+	}
+	if exists then
+		local ok, contents = pcall(readfile, path)
+		fields.readable = ok and type(contents) == 'string'
+		if fields.readable then
+			fields.bytes = #contents
+			fields.matches = entry and contentMatches(entry, contents) or 'unknown'
+			if hashCandidate then
+				local hashOk, digest = invokeHash(hashCandidate, hashOwner, hashMode, contents, hashUseOwner)
+				fields.sha256 = hashOk and validDigest(digest) and digest:lower() or 'hash-failed'
+			end
+		else
+			fields.error = contents
+		end
+	end
+	diagnostics.record('file_state', fields)
 end
 
 local function readCachedRevision()
@@ -501,6 +762,11 @@ if manifestBody then
 	local ok, decoded = pcall(httpService.JSONDecode, httpService, manifestBody)
 	if ok then
 		manifest = validateManifest(decoded)
+		if not manifest then
+			diagnostics.record('manifest_invalid', {bytes = #manifestBody, reason = 'schema validation failed'})
+		end
+	else
+		diagnostics.record('manifest_invalid', {bytes = #manifestBody, reason = decoded})
 	end
 end
 
@@ -508,22 +774,39 @@ if manifest then
 	local previousIndex, hasPreviousIndex = readCachedFileIndex()
 	local profileSeeded = safeIsFile(profileSeedPath)
 	local forceProfileOverride = not safeIsFile(profileOverridePath)
+	local forceRuntimeRepair = not safeIsFile(runtimeRepairPath)
 	local requiredPaths = requiredPublicPaths(manifest)
 	local nextIndex = copyFileIndex(previousIndex)
 	local manifestPaths = {}
 	local pending = {}
+	local requiredCount = 0
+	for _ in requiredPaths do requiredCount += 1 end
+	diagnostics.record('manifest_accepted', {
+		cachedRevision = readCachedRevision() or 'none',
+		files = #manifest.files,
+		forceProfileOverride = forceProfileOverride,
+		forceRuntimeRepair = forceRuntimeRepair,
+		hasPreviousIndex = hasPreviousIndex,
+		requiredFiles = requiredCount,
+		revision = manifest.revision,
+	})
 	for _, entry in ipairs(manifest.files) do
 		manifestPaths[entry.path] = true
 		if requiredPaths[entry.path] then
 			local localPath = folder..'/'..entry.path
 			local seedProfile = seedProfilePaths[entry.path] == true
 			local releaseProfile = releaseProfileOverridePaths[entry.path] == true
-			local needsDownload = not safeIsFile(localPath)
-				or (seedProfile and not profileSeeded)
-				or (releaseProfile and forceProfileOverride)
+			local runtimeFile = entry.path:sub(1, 9) ~= 'profiles/'
+			local reasons = {}
+			if not safeIsFile(localPath) then table.insert(reasons, 'missing') end
+			if seedProfile and not profileSeeded then table.insert(reasons, 'profile-seed') end
+			if releaseProfile and forceProfileOverride then table.insert(reasons, 'profile-override') end
+			if runtimeFile and forceRuntimeRepair then table.insert(reasons, 'runtime-repair') end
+			local needsDownload = #reasons > 0
 			if not needsDownload and not seedProfile then
 				local ok, cached = pcall(readfile, localPath)
 				needsDownload = not ok or not contentMatches(entry, cached)
+				if needsDownload then table.insert(reasons, ok and 'content-mismatch' or 'read-failed') end
 			end
 			if not needsDownload and not seedProfile then
 				local previous = previousIndex[entry.path]
@@ -531,30 +814,37 @@ if manifest then
 					or not previous
 					or previous.bytes ~= entry.bytes
 					or previous.sha256 ~= entry.sha256
+				if needsDownload then table.insert(reasons, 'index-mismatch') end
 			end
 			if needsDownload then
-				table.insert(pending, {entry = entry, localPath = localPath})
+				table.insert(pending, {
+					entry = entry,
+					localPath = localPath,
+					reason = table.concat(reasons, ','),
+				})
+				diagnostics.fileState(entry.path, entry, 'pending:'..table.concat(reasons, ','))
 			else
 				nextIndex[entry.path] = {bytes = entry.bytes, sha256 = entry.sha256}
+				diagnostics.fileState(entry.path, entry, 'cached')
 			end
 		end
 	end
+	diagnostics.record('install_plan', {cached = requiredCount - #pending, pending = #pending})
 	if forceProfileOverride then
 		for path in releaseProfileOverridePaths do
 			if not manifestPaths[path] then
+				diagnostics.record('profile_override_manifest_missing', {path = path})
 				error('profile override manifest missing required file: '..path, 0)
 			end
 		end
 	end
 	local retiredPending = {}
-	if hasPreviousIndex then
-		for path in previousIndex do
-			if retiredRuntimePaths[path] and not manifestPaths[path] then
-				table.insert(retiredPending, path)
-			end
+	for path in retiredRuntimePaths do
+		if not manifestPaths[path] then
+			table.insert(retiredPending, path)
 		end
-		table.sort(retiredPending)
 	end
+	table.sort(retiredPending)
 
 	local downloaded = {}
 	local function fetchPending(index)
@@ -596,29 +886,67 @@ if manifest then
 
 	for index, pendingFile in ipairs(pending) do
 		if type(downloaded[index]) ~= 'string' then
+			diagnostics.record('install_download_set_failed', {
+				path = pendingFile.entry.path,
+				reason = pendingFile.reason,
+			})
+			if safeIsFile(folder..'/os.luau') then
+				warn('BadVape update download failed; using the unchanged cached public runtime.')
+				diagnostics.record('installer_cache_fallback', {
+					path = pendingFile.entry.path,
+					reason = 'atomic download set incomplete',
+				})
+				return runCachedRuntime()
+			end
 			error('failed to download public runtime file: '..pendingFile.entry.path, 0)
 		end
 	end
 	-- All network work succeeded before any cached runtime file is replaced.
 	for index, pendingFile in ipairs(pending) do
-		ensureParent(pendingFile.localPath)
-		writefile(pendingFile.localPath, downloaded[index])
+		local parentOk, parentError = pcall(ensureParent, pendingFile.localPath)
+		if not parentOk then
+			diagnostics.record('install_parent_failed', {error = parentError, path = pendingFile.entry.path})
+			error('failed to prepare public runtime path: '..pendingFile.entry.path, 0)
+		end
+		local writeOk, writeError = pcall(writefile, pendingFile.localPath, downloaded[index])
+		if not writeOk then
+			diagnostics.record('install_write_failed', {error = writeError, path = pendingFile.entry.path})
+			error('failed to install public runtime file: '..pendingFile.entry.path, 0)
+		end
 		local readOk, installed = pcall(readfile, pendingFile.localPath)
 		if not readOk or not contentMatches(pendingFile.entry, installed) then
+			diagnostics.record('install_verify_failed', {
+				bytes = readOk and type(installed) == 'string' and #installed or 0,
+				error = readOk and 'content mismatch' or installed,
+				path = pendingFile.entry.path,
+			})
 			error('failed to verify installed public runtime file: '..pendingFile.entry.path, 0)
 		end
 		nextIndex[pendingFile.entry.path] = {
 			bytes = pendingFile.entry.bytes,
 			sha256 = pendingFile.entry.sha256,
 		}
+		diagnostics.fileState(pendingFile.entry.path, pendingFile.entry, 'installed')
 	end
 	for _, path in ipairs(retiredPending) do
-		neutralizeRetiredRuntimePath(path)
+		local ok, result = pcall(neutralizeRetiredRuntimePath, path)
+		diagnostics.record('retired_runtime_neutralized', {
+			error = ok and 'none' or result,
+			path = path,
+			success = ok and result == true,
+		})
+		if not ok or result ~= true then
+			error('failed to neutralize retired runtime file: '..path, 0)
+		end
 	end
 	writefile(fileIndexPath, encodeFileIndex(nextIndex))
 	writefile(revisionPath, manifest.revision)
 	if releaseRef:match('^[0-9a-f]+$') and #releaseRef == 40 then
 		writefile(releaseRefPath, releaseRef)
+	else
+		-- A branch fallback means an older immutable ref is not a valid repair
+		-- source. Main.lua intentionally treats this marker as the live branch.
+		writefile(releaseRefPath, 'main')
 	end
 	writefile(profileSeedPath, manifest.revision)
 	if forceProfileOverride then
@@ -626,10 +954,21 @@ if manifest then
 	end
 	-- Fallback downloads use this branch; user profile/config files remain untouched.
 	writefile(folder..'/profiles/commit.txt', branch)
+	writefile(runtimeRepairPath, manifest.revision)
+	diagnostics.record('installer_committed', {
+		installed = #pending,
+		releaseRef = releaseRef,
+		revision = manifest.revision,
+		runtimeRepair = forceRuntimeRepair,
+	})
 elseif not safeIsFile(folder..'/os.luau') then
+	diagnostics.record('installer_manifest_unavailable', {
+		reason = manifestBody and 'invalid public manifest' or 'failed to download public manifest',
+	})
 	error(manifestBody and 'invalid public manifest' or 'failed to download public manifest', 0)
 else
 	warn('BadVape update check failed; using the cached public runtime.')
+	diagnostics.record('installer_cache_fallback', {reason = 'manifest unavailable'})
 end
 
 return runCachedRuntime()

@@ -1,5 +1,5 @@
 local license = ...
-local vape = shared and shared.vape
+local vape = shared and shared.BadVape
 if type(vape) ~= 'table' then
 	return false
 end

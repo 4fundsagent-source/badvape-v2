@@ -17,7 +17,7 @@ local inputService = cloneref(game:GetService('UserInputService'))
 local replicatedStorage = cloneref(game:GetService('ReplicatedStorage'))
 
 local lplr = playersService.LocalPlayer
-local vape = shared.vape
+local vape = shared.BadVape
 local entitylib = vape.Libraries.entity
 local mapobj
 local lstats

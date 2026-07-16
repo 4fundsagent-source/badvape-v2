@@ -1,136 +1,136 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-9a22e770f465bd5557c4d443dbbfd7e51b8482e24aef930b20f207cb549a0d31",
+  "revision": "sha256-30d9a15c7016d496572421fcf1ab7f701093e3ecdddf2289492f62914266f2f3",
   "files": [
     {
       "path": "games/11156779721.lua",
-      "bytes": 26016,
-      "sha256": "62d7d60e42a0b1597f13d0452030534923bd83eaec48c58cd22adc437a581d46"
+      "bytes": 25996,
+      "sha256": "4bb922ea3abcead70470aded0b170b004b3d3566b909c8459eb504536c8a2df4"
     },
     {
       "path": "games/123804558118054.lua",
-      "bytes": 1616,
-      "sha256": "54d3e1767e2f5cc6f7dcb2ab9e91e17f09f52d269931c475d6cc60c0b2911089"
+      "bytes": 1625,
+      "sha256": "069fbad44388ff95a5b2ca5b6d7381d8b8228803f5ab7f4b15b022c9831d5d03"
     },
     {
       "path": "games/131465939650733.lua",
-      "bytes": 1616,
-      "sha256": "54d3e1767e2f5cc6f7dcb2ab9e91e17f09f52d269931c475d6cc60c0b2911089"
+      "bytes": 1625,
+      "sha256": "069fbad44388ff95a5b2ca5b6d7381d8b8228803f5ab7f4b15b022c9831d5d03"
     },
     {
       "path": "games/13246639586.lua",
-      "bytes": 1616,
-      "sha256": "5ea2e4cbd62a69c3e06f2b6bac7c7a6a1eb11c088e34943ffd6d4889d3a58ac4"
+      "bytes": 1625,
+      "sha256": "cb53bec035adb6fccfbf31f7abd610b91e7356a59313f08b9ca3f91dfe7e507d"
     },
     {
       "path": "games/135564683255158.lua",
-      "bytes": 1615,
-      "sha256": "baa211b35d0f20cea03425037c4a815074eb6be3ba4bec8cfd1738dc58506d29"
+      "bytes": 1624,
+      "sha256": "aecdf4361618d4bd7cc2433e5f4fee051d6c1d960bedcf63f16b3f780ab05b70"
     },
     {
       "path": "games/139566161526375.lua",
-      "bytes": 36137,
-      "sha256": "1335d7851f49d50f841ba9a77abafe21616613c20f83298b214bf239db91ba6b"
+      "bytes": 36140,
+      "sha256": "054553b267d97d28b60b94cfc037d876aa424d31e838c672429fe5147c7e4e8d"
     },
     {
       "path": "games/142823291.lua",
-      "bytes": 4934,
-      "sha256": "66157467107b09b2446ffcbc5e391572cf120e74d832dca9a1bf4fe0661a8a53"
+      "bytes": 4937,
+      "sha256": "453edbfe4d80a61630c6afab010d6fe3049c0abc1b0ee039c83dc6822120bb69"
     },
     {
       "path": "games/155615604.lua",
-      "bytes": 89536,
-      "sha256": "b4bfb55e684e430ed01bc11ca946c17e57f037dfd1ef4533c0bd0dba14477762"
+      "bytes": 89539,
+      "sha256": "ff810353cd2e86fb8e2696e9263a38d3938b0dee1ad80610a461f7cd099c8bfb"
     },
     {
       "path": "games/5938036553.lua",
-      "bytes": 52369,
-      "sha256": "d675f8ca036a8068a6a94fdc1e0eaa5b208e3f428c673cf2655ef903a6b39d1f"
+      "bytes": 52356,
+      "sha256": "749b5423814dfacc0de7212b952e78752d0dc42c47a9fbf5325187ab52f36ddf"
     },
     {
       "path": "games/606849621.lua",
-      "bytes": 23770,
-      "sha256": "403521ffe82610d6f595b1e81d4f853de4e0b07ca9a6002f382d0cde6a5e2b52"
+      "bytes": 23776,
+      "sha256": "81411a2a4f99cbc89a439d2aaf437ea7a53b16d36419dff71d70f058a91030d7"
     },
     {
       "path": "games/6872265039.lua",
-      "bytes": 6993,
-      "sha256": "e669f8097cb531728bc52692e60f07d0e21c3e9a0e53b4f9ace53fe90d799e2e"
+      "bytes": 6996,
+      "sha256": "6ce10f55b91a18300c716e0afb2ce44f7b53f2a4dff580d6dd95e4fc4a915511"
     },
     {
       "path": "games/6872274481.lua",
-      "bytes": 1075611,
-      "sha256": "4e44a109c5eb1a0455af4696c728a27d99faa9d89b3499d92b227444c95be35a"
+      "bytes": 1108749,
+      "sha256": "f33a919e5f582fcacf54941a849008584c2607f470ff93d54c7e5fe59392d11c"
     },
     {
       "path": "games/77790193039862.lua",
-      "bytes": 31606,
-      "sha256": "c24089aad1589d859cf9e5034d92c92d7fbf849c1a83253656fe31f64b91e1c7"
+      "bytes": 31609,
+      "sha256": "3ca9904af481acf1c73c423dc39a2c071d0e36377dc3c95bf7dbb729b19521d6"
     },
     {
       "path": "games/80041634734121.lua",
-      "bytes": 1620,
-      "sha256": "94190d6d6924132f89e497b01daad39d32434bfe5e6e0f7e57216225c0d92cf7"
+      "bytes": 1629,
+      "sha256": "04aebe8aa5784127e1be1db519963c98e32137cc9b94daa1731e9783b31ccf7c"
     },
     {
       "path": "games/8444591321.lua",
-      "bytes": 859,
-      "sha256": "6af6a95fca677518a0c490c0798fc704dd9b6d561db4ae9a7a8daf8694f7fcbe"
+      "bytes": 862,
+      "sha256": "2924f53bd224852b6fa8faa3c927bbbb145e5be2e8cb576a6829672b3a3b169e"
     },
     {
       "path": "games/8542259458.lua",
-      "bytes": 1616,
-      "sha256": "5ea2e4cbd62a69c3e06f2b6bac7c7a6a1eb11c088e34943ffd6d4889d3a58ac4"
+      "bytes": 1625,
+      "sha256": "cb53bec035adb6fccfbf31f7abd610b91e7356a59313f08b9ca3f91dfe7e507d"
     },
     {
       "path": "games/8542275097.lua",
-      "bytes": 1616,
-      "sha256": "5ea2e4cbd62a69c3e06f2b6bac7c7a6a1eb11c088e34943ffd6d4889d3a58ac4"
+      "bytes": 1625,
+      "sha256": "cb53bec035adb6fccfbf31f7abd610b91e7356a59313f08b9ca3f91dfe7e507d"
     },
     {
       "path": "games/8560631822.lua",
-      "bytes": 859,
-      "sha256": "6af6a95fca677518a0c490c0798fc704dd9b6d561db4ae9a7a8daf8694f7fcbe"
+      "bytes": 862,
+      "sha256": "2924f53bd224852b6fa8faa3c927bbbb145e5be2e8cb576a6829672b3a3b169e"
     },
     {
       "path": "games/8592115909.lua",
-      "bytes": 1616,
-      "sha256": "5ea2e4cbd62a69c3e06f2b6bac7c7a6a1eb11c088e34943ffd6d4889d3a58ac4"
+      "bytes": 1625,
+      "sha256": "cb53bec035adb6fccfbf31f7abd610b91e7356a59313f08b9ca3f91dfe7e507d"
     },
     {
       "path": "games/8768229691.lua",
-      "bytes": 64410,
-      "sha256": "4e01dc1de5503f91629fe9f12ac12e48e0bb653a00e72937bbae5914296ff78e"
+      "bytes": 64394,
+      "sha256": "f993cefe6128beb388a7ebd0dbf3ec374916f2231e28ac4fca29d412d6f535d9"
     },
     {
       "path": "games/893973440.lua",
-      "bytes": 26670,
-      "sha256": "f4f9cc80932b9466b973474cf882914101a651143166507e0bbf96042107d5dc"
+      "bytes": 26673,
+      "sha256": "0984d8b619523865c92e03d106093b0eeb194efcc202b3a6432aab987a6d4b05"
     },
     {
       "path": "games/8951451142.lua",
-      "bytes": 1616,
-      "sha256": "5ea2e4cbd62a69c3e06f2b6bac7c7a6a1eb11c088e34943ffd6d4889d3a58ac4"
+      "bytes": 1625,
+      "sha256": "cb53bec035adb6fccfbf31f7abd610b91e7356a59313f08b9ca3f91dfe7e507d"
     },
     {
       "path": "games/universal.lua",
-      "bytes": 293218,
-      "sha256": "ae10ead6d952ca54819304a89754a4411604f296daf0205050971dcc455e94f9"
+      "bytes": 293071,
+      "sha256": "1c770c1b0b365d7df272513a20119b22ab3ce08b43e1336ee242b639bb07d493"
     },
     {
       "path": "guis/new.lua",
-      "bytes": 248655,
-      "sha256": "59088b8f740b22a6a3ce4be701df379aee645a6f37fe572be3a60a7998541ef3"
+      "bytes": 248854,
+      "sha256": "637347e71fb939e4ea264b3135574936d344161b5d11e3b7ca088b643f438273"
     },
     {
       "path": "guis/old.lua",
-      "bytes": 143154,
-      "sha256": "19d8c5134325e141b20db3386ec481922f182d761a3bc58a155841f73f724e39"
+      "bytes": 143571,
+      "sha256": "1b2c7b1af45ff001396905f6d93a77188192e9e643c2ec6b1a4830343c819c76"
     },
     {
       "path": "init.lua",
-      "bytes": 18409,
-      "sha256": "c911451b6c66c3decfda28fc28f4146233d3fee4acade761b15c741d4caa3c56"
+      "bytes": 32876,
+      "sha256": "c015cd3bd576d262acc1980c0cf903d67e387037d397f4d0ec860bcf5cd4e4c0"
     },
     {
       "path": "libraries/badvape-theme.lua",
@@ -174,18 +174,18 @@
     },
     {
       "path": "loader.lua",
-      "bytes": 267,
-      "sha256": "b3acdce3022a3eff59f32527028b213ff6b9e02764d2236f2ac14a76548c21f8"
+      "bytes": 270,
+      "sha256": "8bec95396f66ba8875d0f1dab9debddc9a7e14a67ace4babac2469f28ec2ef4e"
     },
     {
       "path": "main.lua",
-      "bytes": 15012,
-      "sha256": "a1e20af54800c5d8fe858594044b9805c8e2233fe2d4d989f08647ecca70e32b"
+      "bytes": 19695,
+      "sha256": "1f36570543a88779c4e1aaa557ae1a70a2241b11d19b41ac1765aaef3b612b50"
     },
     {
       "path": "os.luau",
-      "bytes": 12513,
-      "sha256": "f3905c3f4f2d2b02a54abbeec1eefc73af18f84d2e4134821790fea3c151cb80"
+      "bytes": 11460,
+      "sha256": "e7f8e702b45ec134e8b416f5e3f6c17a1d5060920f062170c6b029a0595b9bf7"
     },
     {
       "path": "profiles/2619619496.gui.txt",
@@ -229,8 +229,8 @@
     },
     {
       "path": "reinstall.luau",
-      "bytes": 301,
-      "sha256": "eeab45944c3f634e9bb631f07d47d39ded4ec5c6674463236b997911ca1d54e5"
+      "bytes": 650,
+      "sha256": "41125fbeadc82332452a467f2497f1555af8d53d2ed10bfc23a6d5c62788ba1b"
     }
   ]
 }

@@ -14,7 +14,7 @@ local tweenService = cloneref(game:GetService('TweenService'))
 local gameCamera = workspace.CurrentCamera
 local lplr = playersService.LocalPlayer
 
-local vape = shared.vape
+local vape = shared.BadVape
 local entitylib = vape.Libraries.entity
 local targetinfo = vape.Libraries.targetinfo
 local prediction = vape.Libraries.prediction
@@ -737,7 +737,7 @@ run(function()
     		blur.Size = UDim2.new(1, 89, 1, 52)
     		blur.Position = UDim2.fromOffset(-48, -31)
     		blur.BackgroundTransparency = 1
-    		blur.Image = getcustomasset('badvape/assets/new/blur.png')
+		blur.Image = 'rbxassetid://14898786664'
     		blur.ScaleType = Enum.ScaleType.Slice
     		blur.SliceCenter = Rect.new(52, 31, 261, 502)
     		blur.Parent = holder

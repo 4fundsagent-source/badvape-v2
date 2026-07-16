@@ -17,7 +17,7 @@ local function resolveRuntimeEnvironment()
 	return {}
 end
 local runtimeEnvironment = resolveRuntimeEnvironment()
-local vape = shared.vape
+local vape = shared.BadVape
 local loadstring = function(...)
 	local res, err = loadstring(...)
 	if err and vape then
@@ -34,7 +34,7 @@ local isfile = isfile
 	end
 local function downloadFile(path, func)
 	if not isfile(path) then
-		if shared.VapeDeveloper then
+		if shared.BadVapeDeveloper then
 			error('Missing local BadVape file: '..path)
 		end
 
@@ -89,7 +89,7 @@ local function serializeSessionInfo(objects)
 	end
 	local success, source = pcall(function()
 		local json = httpService:JSONEncode(saved)
-		return 'shared.vapesessioninfo = '..httpService:JSONEncode(json)
+		return 'shared.BadVapeSessionInfo = '..httpService:JSONEncode(json)
 	end)
 	return success and type(source) == 'string' and source or nil
 end
@@ -130,7 +130,7 @@ local function addBlur(parent)
 	blur.Size = UDim2.new(1, 89, 1, 52)
 	blur.Position = UDim2.fromOffset(-48, -31)
 	blur.BackgroundTransparency = 1
-	blur.Image = getcustomasset('badvape/assets/new/blur.png')
+	blur.Image = 'rbxassetid://14898786664'
 	blur.ScaleType = Enum.ScaleType.Slice
 	blur.SliceCenter = Rect.new(52, 31, 261, 502)
 	blur.Parent = parent
@@ -216,12 +216,12 @@ end
 local visited, attempted, tpSwitch = {}, {}, false
 local cacheExpire, cache = tick()
 local function serverHop(pointer, filter)
-	if shared.VapeDeveloper then
+	if shared.BadVapeDeveloper then
 		notif('BadVape', 'Server hop is disabled in local offline mode.', 5, 'warning')
 		return
 	end
 
-	visited = shared.vapeserverhoplist and shared.vapeserverhoplist:split('/') or {}
+	visited = shared.BadVapeServerHopList and shared.BadVapeServerHopList:split('/') or {}
 	if not table.find(visited, game.JobId) then
 		table.insert(visited, game.JobId)
 	end
@@ -277,9 +277,9 @@ vape:Clean(lplr.OnTeleport:Connect(function()
 	if not tpSwitch then
 		tpSwitch = true
 		queueTeleportPart('20-server-hop',
-			"shared.vapeserverhoplist = '"
+			"shared.BadVapeServerHopList = '"
 				.. table.concat(visited, '/')
-				.. "'\nshared.vapeserverhopprevious = '"
+				.. "'\nshared.BadVapeServerHopPrevious = '"
 				.. game.JobId
 				.. "'"
 		)
@@ -855,7 +855,7 @@ run(function()
 		iconframe.Parent = mainframe
 		local icon = Instance.new('ImageLabel')
 		icon.Size = UDim2.fromOffset(36, 36)
-		icon.Image = getcustomasset('badvape/assets/new/vape.png')
+		icon.Image = 'rbxassetid://14373395239'
 		icon.BackgroundTransparency = 1
 		icon.Parent = iconframe
 		constraint.MaxSize = Vector2.new(math.max(getfontsize(text, 20, textlabel.FontFace).X + 80, 600), math.huge)
@@ -877,7 +877,7 @@ run(function()
 	end
 
 	function whitelist:update(first)
-		if shared.VapeDeveloper then
+		if shared.BadVapeDeveloper then
 			whitelist.loaded = true
 			return true
 		end
@@ -1309,7 +1309,7 @@ run(function()
 		iconframe.Parent = mainframe
 		local icon = Instance.new('ImageLabel')
 		icon.Size = UDim2.fromOffset(36, 36)
-		icon.Image = getcustomasset('badvape/assets/new/vape.png')
+		icon.Image = 'rbxassetid://14373395239'
 		icon.BackgroundTransparency = 1
 		icon.Parent = iconframe
 		constraint.MaxSize = Vector2.new(math.max(getfontsize(text, 20, textlabel.FontFace).X + 80, 600), math.huge)
@@ -1331,7 +1331,7 @@ run(function()
 	end
 
 	function whitelist:update(first)
-		if shared.VapeDeveloper then
+		if shared.BadVapeDeveloper then
 			whitelist.loaded = true
 			return true
 		end
@@ -1512,7 +1512,7 @@ local mouseClicked
 local Fly
 local LongJump
 
-runtimeEnvironment.used_init = true
+runtimeEnvironment.BadVapeUsedInit = true
 
 run(function()
 	local Radar
@@ -1567,7 +1567,7 @@ run(function()
 
 	Radar = vape:CreateOverlay({
 		Name = 'Radar',
-		Icon = getcustomasset('badvape/assets/new/radaricon.png'),
+		Icon = 'rbxassetid://14368343291',
 		Size = UDim2.fromOffset(14, 14),
 		Position = UDim2.fromOffset(12, 13),
 		Function = function(callback)
@@ -1718,7 +1718,7 @@ run(function()
 
 	SessionInfo = vape:CreateOverlay({
 		Name = 'Session Info',
-		Icon = getcustomasset('badvape/assets/new/textguiicon.png'),
+		Icon = 'rbxassetid://14368355456',
 		Size = UDim2.fromOffset(16, 12),
 		Position = UDim2.fromOffset(12, 14),
 		Function = function(callback)
@@ -1733,9 +1733,9 @@ run(function()
 					end
 				end))
 
-				if shared.vapesessioninfo then
+				if shared.BadVapeSessionInfo then
 					local success, restored = pcall(function()
-						return httpService:JSONDecode(shared.vapesessioninfo)
+						return httpService:JSONDecode(shared.BadVapeSessionInfo)
 					end)
 					if success and type(restored) == 'table' then
 						for i, v in restored do
@@ -1797,8 +1797,8 @@ run(function()
 	Hide = SessionInfo:CreateTextList({
 		Name = 'Blacklist',
 		Tooltip = 'Name of entry to hide.',
-		Icon = getcustomasset('badvape/assets/new/blockedicon.png'),
-		Tab = getcustomasset('badvape/assets/new/blockedtab.png'),
+		Icon = 'rbxassetid://14385669108',
+		Tab = 'rbxassetid://14385672881',
 		TabSize = UDim2.fromOffset(21, 16),
 		Color = Color3.fromRGB(250, 50, 56),
 	})
@@ -4922,7 +4922,7 @@ run(function()
     	arrow.BackgroundTransparency = 1
     	arrow.BorderSizePixel = 0
     	arrow.Visible = false
-    	arrow.Image = getcustomasset('badvape/assets/new/arrowmodule.png')
+			arrow.Image = 'rbxassetid://14473354880'
     	arrow.ImageColor3 = entitylib.getEntityColor(ent) or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
     	arrow.Parent = Folder
     	Reference[ent] = arrow
@@ -7648,11 +7648,11 @@ run(function()
     	Function = function()
     		notif(
     			'ServerHop',
-    			shared.vapeserverhopprevious and 'Rejoining previous server...' or 'Cannot find previous server',
+			shared.BadVapeServerHopPrevious and 'Rejoining previous server...' or 'Cannot find previous server',
     			5
     		)
-    		if shared.vapeserverhopprevious then
-    			teleportService:TeleportToPlaceInstance(game.PlaceId, shared.vapeserverhopprevious)
+		if shared.BadVapeServerHopPrevious then
+			teleportService:TeleportToPlaceInstance(game.PlaceId, shared.BadVapeServerHopPrevious)
     		end
     	end,
     })

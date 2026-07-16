@@ -1,4 +1,4 @@
-shared.vapereload = true
+shared.BadVapeReload = true
 local folder = shared.BadVapeFolder or 'badvape'
 local chunk, loadError = loadstring(readfile(folder..'/os.luau'), folder..'/os.luau')
 if type(chunk) ~= 'function' then

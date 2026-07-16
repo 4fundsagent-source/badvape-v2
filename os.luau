@@ -38,6 +38,10 @@ end
 
 local folder = getRuntimeFolder()
 local runtimeEnvironment = resolveRuntimeEnvironment()
+local previousRuntimeRestore = shared.BadVapeRestoreRuntimeEnvironment
+if type(previousRuntimeRestore) == 'function' then
+	pcall(previousRuntimeRestore)
+end
 shared.BadVapeFolder = folder
 local protect = newcclosure or function(callback)
 	return callback
@@ -211,19 +215,37 @@ end
 applyBadVapeGuiThemeOnce()
 pcall(repairBuiltInProfileList, folder..'/profiles/2619619496.gui.txt')
 
-shared.catdata = nil
-if shared.VapeDeveloper == nil then
+if shared.BadVapeDeveloper == nil then
 	local commitOk, commit = pcall(readfile, folder..'/profiles/commit.txt')
-	shared.VapeDeveloper = commitOk and commit == 'local'
+	shared.BadVapeDeveloper = commitOk and commit == 'local'
 end
-shared.vapereload = shared.vapereload or false
+shared.BadVapeReload = shared.BadVapeReload or false
 
-local redirectRoots = {'catrewrite', 'badrewrite', 'badvape'}
+-- BadVape keeps a virtual `badvape` root so developer/canary installs can use a
+-- distinct physical folder. Do not rewrite another client's roots.
+local redirectRoots = {'badvape'}
+local function ownsRuntimePath(path)
+	if type(path) ~= 'string' then
+		return false
+	end
+	path = path:gsub('\\', '/')
+	if path == folder or path:sub(1, #folder + 1) == folder..'/' then
+		return true
+	end
+	for _, root in redirectRoots do
+		if path == root or path:sub(1, #root + 1) == root..'/' then
+			return true
+		end
+	end
+	return false
+end
+
 local function redirectPath(path)
 	if type(path) ~= 'string' then
 		return path
 	end
 
+	local originalPath = path
 	path = path:gsub('\\', '/')
 	if path == folder or path:sub(1, #folder + 1) == folder..'/' then
 		return path
@@ -237,16 +259,45 @@ local function redirectPath(path)
 		end
 	end
 
-	return path
+	return originalPath
 end
 
+local environmentHooks = {}
+local runtimeCleanups = {}
+local restoreRuntimeEnvironment
+local function installEnvironmentHook(name, original, wrapped)
+	environmentHooks[name] = {Original = original, Wrapped = wrapped}
+	runtimeEnvironment[name] = wrapped
+end
+
+restoreRuntimeEnvironment = function()
+	for name, hook in environmentHooks do
+		if runtimeEnvironment[name] == hook.Wrapped then
+			runtimeEnvironment[name] = hook.Original
+		end
+	end
+	for index = #runtimeCleanups, 1, -1 do
+		pcall(runtimeCleanups[index])
+	end
+	table.clear(environmentHooks)
+	table.clear(runtimeCleanups)
+	if shared.BadVapeRestoreRuntimeEnvironment == restoreRuntimeEnvironment then
+		shared.BadVapeRestoreRuntimeEnvironment = nil
+	end
+end
+shared.BadVapeRestoreRuntimeEnvironment = restoreRuntimeEnvironment
+
 local oldReadfile = readfile
-runtimeEnvironment.readfile = protect(function(path)
+local wrappedReadfile = protect(function(path)
 	return oldReadfile(redirectPath(path))
 end)
+installEnvironmentHook('readfile', oldReadfile, wrappedReadfile)
 
 local oldWritefile = writefile
-runtimeEnvironment.writefile = protect(function(path, content)
+local wrappedWritefile = protect(function(path, content)
+	if not ownsRuntimePath(path) then
+		return oldWritefile(path, content)
+	end
 	local redirected = redirectPath(path)
 	local parts = redirected:split('/')
 	local current = ''
@@ -258,32 +309,39 @@ runtimeEnvironment.writefile = protect(function(path, content)
 
 	return oldWritefile(redirected, content)
 end)
+installEnvironmentHook('writefile', oldWritefile, wrappedWritefile)
 
 local oldIsfile = isfile
 if oldIsfile then
-	runtimeEnvironment.isfile = protect(function(path)
+	local wrappedIsfile = protect(function(path)
 		return oldIsfile(redirectPath(path))
 	end)
+	installEnvironmentHook('isfile', oldIsfile, wrappedIsfile)
 end
 
 local oldIsfolder = isfolder
 if oldIsfolder then
-	runtimeEnvironment.isfolder = protect(function(path)
+	local wrappedIsfolder = protect(function(path)
 		return oldIsfolder(redirectPath(path))
 	end)
+	installEnvironmentHook('isfolder', oldIsfolder, wrappedIsfolder)
 end
 
 local oldMakefolder = makefolder
 if oldMakefolder then
-	runtimeEnvironment.makefolder = protect(function(path)
+	local wrappedMakefolder = protect(function(path)
 		return oldMakefolder(redirectPath(path))
 	end)
+	installEnvironmentHook('makefolder', oldMakefolder, wrappedMakefolder)
 end
 
 local oldListfiles = listfiles
 if oldListfiles then
-	runtimeEnvironment.listfiles = protect(function(path)
+	local wrappedListfiles = protect(function(path)
 		local files = oldListfiles(redirectPath(path))
+		if not ownsRuntimePath(path) then
+			return files
+		end
 		local normalized = {}
 
 		for index, file in files do
@@ -292,97 +350,19 @@ if oldListfiles then
 
 		return normalized
 	end)
+	installEnvironmentHook('listfiles', oldListfiles, wrappedListfiles)
 end
 
 local oldDelfile = delfile
 if oldDelfile then
-	runtimeEnvironment.delfile = protect(function(path)
+	local wrappedDelfile = protect(function(path)
 		return oldDelfile(redirectPath(path))
 	end)
-end
-
-local assetIdMap = {
-	['add.png'] = 'rbxassetid://14368300605',
-	['alert.png'] = 'rbxassetid://14368301329',
-	['allowedicon.png'] = 'rbxassetid://14368302000',
-	['allowedtab.png'] = 'rbxassetid://14368302875',
-	['arrowmodule.png'] = 'rbxassetid://14473354880',
-	['back.png'] = 'rbxassetid://14368303894',
-	['bind.png'] = 'rbxassetid://14368304734',
-	['bindbkg.png'] = 'rbxassetid://14368305655',
-	['blatanticon.png'] = 'rbxassetid://14368306745',
-	['blockedicon.png'] = 'rbxassetid://14385669108',
-	['blockedtab.png'] = 'rbxassetid://14385672881',
-	['blur.png'] = 'rbxassetid://14898786664',
-	['blurnotif.png'] = 'rbxassetid://16738720137',
-	['close.png'] = 'rbxassetid://14368309446',
-	['closemini.png'] = 'rbxassetid://14368310467',
-	['colorpreview.png'] = 'rbxassetid://14368311578',
-	['combaticon.png'] = 'rbxassetid://14368312652',
-	['customsettings.png'] = 'rbxassetid://14403726449',
-	['dots.png'] = 'rbxassetid://14368314459',
-	['edit.png'] = 'rbxassetid://14368315443',
-	['expandicon.png'] = 'rbxassetid://14368353032',
-	['expandright.png'] = 'rbxassetid://14368316544',
-	['expandup.png'] = 'rbxassetid://14368317595',
-	['friendstab.png'] = 'rbxassetid://14397462778',
-	['guisettings.png'] = 'rbxassetid://14368318994',
-	['guislider.png'] = 'rbxassetid://14368320020',
-	['guisliderrain.png'] = 'rbxassetid://14368321228',
-	['guiv4.png'] = 'rbxassetid://14368322199',
-	['guivape.png'] = 'rbxassetid://14657521312',
-	['info.png'] = 'rbxassetid://14368324807',
-	['inventoryicon.png'] = 'rbxassetid://14928011633',
-	['legit.png'] = 'rbxassetid://14425650534',
-	['legittab.png'] = 'rbxassetid://14426740825',
-	['miniicon.png'] = 'rbxassetid://14368326029',
-	['notification.png'] = 'rbxassetid://16738721069',
-	['overlaysicon.png'] = 'rbxassetid://14368339581',
-	['overlaystab.png'] = 'rbxassetid://14397380433',
-	['pin.png'] = 'rbxassetid://14368342301',
-	['profilesicon.png'] = 'rbxassetid://14397465323',
-	['radaricon.png'] = 'rbxassetid://14368343291',
-	['rainbow_1.png'] = 'rbxassetid://14368344374',
-	['rainbow_2.png'] = 'rbxassetid://14368345149',
-	['rainbow_3.png'] = 'rbxassetid://14368345840',
-	['rainbow_4.png'] = 'rbxassetid://14368346696',
-	['range.png'] = 'rbxassetid://14368347435',
-	['rangearrow.png'] = 'rbxassetid://14368348640',
-	['rendericon.png'] = 'rbxassetid://14368350193',
-	['rendertab.png'] = 'rbxassetid://14397373458',
-	['search.png'] = 'rbxassetid://14425646684',
-	['targetinfoicon.png'] = 'rbxassetid://14368354234',
-	['targetnpc1.png'] = 'rbxassetid://14497400332',
-	['targetnpc2.png'] = 'rbxassetid://14497402744',
-	['targetplayers1.png'] = 'rbxassetid://14497396015',
-	['targetplayers2.png'] = 'rbxassetid://14497397862',
-	['targetstab.png'] = 'rbxassetid://14497393895',
-	['textguiicon.png'] = 'rbxassetid://14368355456',
-	['textv4.png'] = 'rbxassetid://14368357095',
-	['textvape.png'] = 'rbxassetid://14368358200',
-	['utilityicon.png'] = 'rbxassetid://14368359107',
-	['vape.png'] = 'rbxassetid://14373395239',
-	['warning.png'] = 'rbxassetid://14368361552',
-	['worldicon.png'] = 'rbxassetid://14368362492',
-}
-
-local oldGetcustomasset = getcustomasset
-if oldGetcustomasset then
-	runtimeEnvironment.getcustomasset = protect(function(path)
-		if type(path) == 'string' then
-			local filename = path:match('[^/\\]+%.%w+$')
-			if filename and assetIdMap[filename] then
-				return assetIdMap[filename]
-			end
-		end
-
-		return oldGetcustomasset(redirectPath(path))
-	end)
+	installEnvironmentHook('delfile', oldDelfile, wrappedDelfile)
 end
 
 local function urlToLocalPath(url)
-	local path = url:match('raw%.githubusercontent%.com/[^/]+/CatV6/[^/]+/(.+)')
-		or url:match('raw%.githubusercontent%.com/[^/]+/badvape%-v2/[^/]+/(.+)')
+	local path = url:match('raw%.githubusercontent%.com/[^/]+/badvape%-v2/[^/]+/(.+)')
 
 	if path then
 		return folder..'/'..path
@@ -391,12 +371,13 @@ local function urlToLocalPath(url)
 	return nil
 end
 
-if shared.VapeDeveloper and getrawmetatable and setreadonly and getnamecallmethod then
+if shared.BadVapeDeveloper and getrawmetatable and setreadonly and getnamecallmethod then
 	local gameMetatable = getrawmetatable(game)
 	local oldNamecall = gameMetatable.__namecall
+	local wrappedNamecall
 
 	setreadonly(gameMetatable, false)
-	gameMetatable.__namecall = protect(function(self, ...)
+	wrappedNamecall = protect(function(self, ...)
 		local method = getnamecallmethod()
 		local args = {...}
 
@@ -415,7 +396,16 @@ if shared.VapeDeveloper and getrawmetatable and setreadonly and getnamecallmetho
 
 		return oldNamecall(self, ...)
 	end)
+	gameMetatable.__namecall = wrappedNamecall
 	setreadonly(gameMetatable, true)
+	table.insert(runtimeCleanups, function()
+		local currentMetatable = getrawmetatable(game)
+		if currentMetatable.__namecall == wrappedNamecall then
+			setreadonly(currentMetatable, false)
+			currentMetatable.__namecall = oldNamecall
+			setreadonly(currentMetatable, true)
+		end
+	end)
 end
 
 repeat
@@ -429,15 +419,18 @@ until localPlayer and localPlayer:FindFirstChild('PlayerGui')
 
 local mainPath = folder..'/main.lua'
 if not safeIsFile(mainPath) then
+	restoreRuntimeEnvironment()
 	error('Missing local BadVape entrypoint', 0)
 end
 local mainChunk, mainLoadError = loadstring(readfile(mainPath), 'badvape/main.lua')
 if not mainChunk then
+	restoreRuntimeEnvironment()
 	error('BadVape entrypoint rejected: '..tostring(mainLoadError), 0)
 end
 
 local mainOk, mainResult = pcall(mainChunk, license)
 if not mainOk then
+	restoreRuntimeEnvironment()
 	error('BadVape entrypoint failed: '..tostring(mainResult), 0)
 end
 return mainResult

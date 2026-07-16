@@ -61,24 +61,26 @@ local uipallet = {
 
 local getcustomassets = {
 	['badvape/assets/old/barlogo.png'] = 'rbxasset://barlogo.png',
-	['badvape/assets/old/blatanticon.png'] = 'rbxasset://blatanticon.png',
+	['badvape/assets/old/blatanticon.png'] = 'rbxassetid://14368306745',
 	['badvape/assets/old/checkbox.png'] = 'rbxasset://checkbox.png',
-	['badvape/assets/old/combaticon.png'] = 'rbxasset://combaticon.png',
+	['badvape/assets/old/combaticon.png'] = 'rbxassetid://14368312652',
 	['badvape/assets/old/friendsicon.png'] = 'rbxasset://friendsicon.png',
 	['badvape/assets/old/guiicon.png'] = 'rbxasset://guiicon.png',
-	['badvape/assets/old/info.png'] = 'rbxasset://info.png',
-	['badvape/assets/old/pin.png'] = 'rbxasset://pin.png',
-	['badvape/assets/old/profilesicon.png'] = 'rbxasset://profilesicon.png',
-	['badvape/assets/old/rendericon.png'] = 'rbxasset://rendericon.png',
-	['badvape/assets/old/search.png'] = 'rbxasset://search.png',
+	['badvape/assets/old/info.png'] = 'rbxassetid://14368324807',
+	['badvape/assets/old/pin.png'] = 'rbxassetid://14368342301',
+	['badvape/assets/old/profilesicon.png'] = 'rbxassetid://14397465323',
+	['badvape/assets/old/rendericon.png'] = 'rbxassetid://14368350193',
+	['badvape/assets/old/search.png'] = 'rbxassetid://14425646684',
 	['badvape/assets/old/settingsicon.png'] = 'rbxasset://settingsicon.png',
-	['badvape/assets/old/targetinfoicon.png'] = 'rbxasset://targetinfoicon.png',
-	['badvape/assets/old/textguiicon.png'] = 'rbxasset://textguiicon.png',
-	['badvape/assets/old/textv4.png'] = 'rbxasset://textv4.png',
-	['badvape/assets/old/textvape.png'] = 'rbxasset://textvape.png',
-	['badvape/assets/old/utilityicon.png'] = 'rbxasset://utilityicon.png',
+	['badvape/assets/old/targetinfoicon.png'] = 'rbxassetid://14368354234',
+	['badvape/assets/old/textguiicon.png'] = 'rbxassetid://14368355456',
+	['badvape/assets/old/textv4.png'] = 'rbxassetid://14368357095',
+	['badvape/assets/old/textvape.png'] = 'rbxassetid://14368358200',
+	['badvape/assets/old/utilityicon.png'] = 'rbxassetid://14368359107',
 	['badvape/assets/old/vape.png'] = 'rbxassetid://14373395239',
-	['badvape/assets/old/worldicon.png'] = 'rbxasset://worldicon.png'
+	['badvape/assets/old/worldicon.png'] = 'rbxassetid://14368362492',
+	['badvape/assets/new/expandicon.png'] = 'rbxassetid://14368353032',
+	['badvape/assets/new/rangearrow.png'] = 'rbxassetid://14368348640'
 }
 
 local isfile = isfile or function(file)
@@ -220,7 +222,7 @@ end
 
 local function downloadFile(path, func)
 	if not isfile(path) then
-		if shared.VapeDeveloper then
+		if shared.BadVapeDeveloper then
 			error('Missing local BadVape file: '..path)
 		end
 
@@ -239,10 +241,18 @@ local function downloadFile(path, func)
 	return (func or readfile)(path)
 end
 
-getcustomasset = not inputService.TouchEnabled and assetfunction and function(path)
-	return downloadFile(path, assetfunction)
-end or function(path)
-	return getcustomassets[path] or ''
+getcustomasset = function(path)
+	local default = getcustomassets[path]
+	if type(default) == 'string' and default:find('^rbxassetid://') then
+		return default
+	end
+	if not inputService.TouchEnabled and assetfunction then
+		local suc, res = pcall(downloadFile, path, assetfunction)
+		if suc then
+			return res
+		end
+	end
+	return default or ''
 end
 
 local function getTableSize(tab)
@@ -3367,9 +3377,10 @@ function mainapi:Uninject()
 	mainapi.gui:Destroy()
 	table.clear(mainapi.Libraries)
 	loopClean(mainapi)
-	shared.vape = nil
-	shared.vapereload = nil
-	shared.VapeIndependent = nil
+	if shared.BadVape == mainapi then shared.BadVape = nil end
+	if _G.BadVape == mainapi then _G.BadVape = nil end
+	shared.BadVapeReload = nil
+	shared.BadVapeIndependent = nil
 end
 
 gui = Instance.new('ScreenGui')
@@ -3730,8 +3741,8 @@ topbar:CreateDropdown({
 	Function = function(val, mouse)
 		if mouse then
 			writefile('badvape/profiles/gui.txt', val)
-			shared.vapereload = true
-			if shared.VapeDeveloper then
+			shared.BadVapeReload = true
+			if shared.BadVapeDeveloper then
 				loadstring(readfile('badvape/loader.lua'), 'loader')(license)
 			else
 				loadstring(game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..readfile('badvape/profiles/commit.txt')..'/loader.lua', true), 'loader')(license)
@@ -3768,8 +3779,8 @@ topbar:CreateButton({
 		if isfile('badvape/profiles/'..mainapi.Profile..mainapi.Place..'.txt') and delfile then
 			delfile('badvape/profiles/'..mainapi.Profile..mainapi.Place..'.txt')
 		end
-		shared.vapereload = true
-		if shared.VapeDeveloper then
+		shared.BadVapeReload = true
+		if shared.BadVapeDeveloper then
 			loadstring(readfile('badvape/loader.lua'), 'loader')(license)
 		else
 			loadstring(game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..readfile('badvape/profiles/commit.txt')..'/loader.lua', true), 'loader')(license)
@@ -3832,8 +3843,8 @@ topbar:CreateButton({
 topbar:CreateButton({
 	Name = 'REINEJCT',
 	Function = function()
-		shared.vapereload = true
-		if shared.VapeDeveloper then
+		shared.BadVapeReload = true
+		if shared.BadVapeDeveloper then
 			loadstring(readfile('badvape/loader.lua'), 'loader')(license)
 		else
 			loadstring(game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..readfile('badvape/profiles/commit.txt')..'/loader.lua', true), 'loader')(license)

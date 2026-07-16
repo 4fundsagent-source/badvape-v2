@@ -322,7 +322,7 @@ end
 
 local function downloadFile(path, func)
 	if not isfile(path) then
-		if shared.VapeDeveloper then
+		if shared.BadVapeDeveloper then
 			error('Missing local BadVape file: '..path)
 		end
 
@@ -341,14 +341,18 @@ local function downloadFile(path, func)
 	return (func or readfile)(path)
 end
 
-getcustomasset = assetfunction and function(path)
-	local suc, res = pcall(downloadFile, path, assetfunction)
-	if suc then
-		return res
+getcustomasset = function(path)
+	local default = getcustomassets[path]
+	if type(default) == 'string' and default:find('^rbxassetid://') then
+		return default
 	end
-	return getcustomassets[path] or ''
-end or function(path)
-	return getcustomassets[path] or ''
+	if assetfunction then
+		local suc, res = pcall(downloadFile, path, assetfunction)
+		if suc then
+			return res
+		end
+	end
+	return default or ''
 end
 
 local function getTableSize(tab)
@@ -2163,7 +2167,7 @@ components = {
 			xpcall(function()
 				optionsettings.Function(self.Enabled)
 			end, function(err)
-				if shared.VapeDeveloper then
+				if shared.BadVapeDeveloper then
 					mainapi:CreateNotification('BadVape', 'gui error: '.. err, 15, 'warning')
 					task.defer(error, err)
 				end	
@@ -5674,7 +5678,7 @@ function mainapi:Load(skipgui, profile)
 	self.Loaded = savecheck
 	self.Categories.Main.Options.Bind:SetBind(self.Keybind)
 
-	if not inputService.KeyboardEnabled or shared.VapeDeveloper then
+	if not inputService.KeyboardEnabled or shared.BadVapeDeveloper then
 		local hide = isfile('badvape/profiles/hide.txt') and readfile('badvape/profiles/hide.txt') or nil
 		if hide ~= nil then
 			hide = hide == 'true' and true or false
@@ -5847,9 +5851,10 @@ function mainapi:Uninject()
 	mainapi.gui:Destroy()
 	table.clear(mainapi.Libraries)
 	loopClean(mainapi)
-	shared.vape = nil
-	shared.vapereload = nil
-	shared.VapeIndependent = nil
+	if shared.BadVape == mainapi then shared.BadVape = nil end
+	if _G.BadVape == mainapi then _G.BadVape = nil end
+	shared.BadVapeReload = nil
+	shared.BadVapeIndependent = nil
 end
 
 gui = Instance.new('ScreenGui')
@@ -6143,8 +6148,8 @@ general:CreateButton({
 		if isfile('badvape/profiles/'..mainapi.Profile..mainapi.Place..'.txt') and delfile then
 			delfile('badvape/profiles/'..mainapi.Profile..mainapi.Place..'.txt')
 		end
-		shared.vapereload = true
-		if shared.VapeDeveloper then
+		shared.BadVapeReload = true
+		if shared.BadVapeDeveloper then
 			loadstring(readfile('badvape/loader.lua'), 'loader')(license)
 		else
 			loadstring(game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..readfile('badvape/profiles/commit.txt')..'/loader.lua', true), 'loader')(license)
@@ -6177,8 +6182,8 @@ general:CreateButton({
 general:CreateButton({
 	Name = 'Reinject',
 	Function = function()
-		shared.vapereload = true
-		if shared.VapeDeveloper then
+		shared.BadVapeReload = true
+		if shared.BadVapeDeveloper then
 			loadstring(readfile('badvape/loader.lua'), 'loader')(license)
 		else
 			loadstring(game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..readfile('badvape/profiles/commit.txt')..'/loader.lua', true), 'loader')(license)
@@ -6294,8 +6299,8 @@ guipane:CreateDropdown({
 	Function = function(val, mouse)
 		if mouse then
 			writefile('badvape/profiles/gui.txt', val)
-			shared.vapereload = true
-			if shared.VapeDeveloper then
+			shared.BadVapeReload = true
+			if shared.BadVapeDeveloper then
 				loadstring(readfile('badvape/loader.lua'), 'loader')(license)
 			else
 				loadstring(game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..readfile('badvape/profiles/commit.txt')..'/loader.lua', true), 'loader')(license)

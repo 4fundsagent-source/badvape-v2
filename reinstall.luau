@@ -2,8 +2,15 @@ local cloneref = cloneref or function(ref)
 	return ref
 end
 
-if isfolder('badvape') then
-	delfolder('badvape')
+local folder = shared.BadVapeFolder or 'badvape'
+if isfolder(folder) then
+	if type(delfolder) ~= 'function' then
+		error('Your executor cannot remove the existing BadVape folder.', 0)
+	end
+	local deleted, deleteError = pcall(delfolder, folder)
+	if not deleted or isfolder(folder) then
+		error('Failed to remove the existing BadVape folder: '..tostring(deleteError or 'folder still exists'), 0)
+	end
 end
 
 cloneref(game:GetService('StarterGui')):SetCore('SendNotification', {

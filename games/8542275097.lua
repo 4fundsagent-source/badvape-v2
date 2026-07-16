@@ -1,5 +1,5 @@
 
-local vape = shared.vape
+local vape = shared.BadVape
 local loadstring = function(...)
 	local res, err = loadstring(...)
 	if err and vape then
@@ -15,7 +15,7 @@ local isfile = isfile or function(file)
 end
 local function downloadFile(path, func)
 	if not isfile(path) then
-		if shared.VapeDeveloper then
+		if shared.BadVapeDeveloper then
 			error('Missing local BadVape file: '..path)
 		end
 
@@ -37,7 +37,7 @@ vape.Place = 8768229691
 if isfile('badvape/games/' .. vape.Place .. '.lua') then
 	loadstring(readfile('badvape/games/' .. vape.Place .. '.lua'), tostring(vape.Place))()
 else
-	if not shared.VapeDeveloper then
+	if not shared.BadVapeDeveloper then
 		local suc, res = pcall(function()
 			return game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'.. readfile('badvape/profiles/commit.txt').. '/games/'.. vape.Place.. '.lua', true)
 		end)

@@ -55,3 +55,14 @@ uses the installed immutable release reference for runtime repairs. During the
 canonical-route migration it may delete or neutralize only the two retired
 game filenames; it never uses a cached index to remove profiles or arbitrary
 local files.
+
+## Support diagnostics
+
+Every public launch replaces `workspace/badvape/badvape-debug.txt` with a report
+for that launch. If the game module does not load, send that file to support. It
+includes the executor capability check, release and manifest selection, cache
+validation, download/write verification, compile/runtime failures, and the
+protected-auth failure stage and correlation reference when available.
+
+The report does not store the customer's key or UID, HWID/device value, request
+headers, auth tokens, response bodies, source contents, or profile contents.
