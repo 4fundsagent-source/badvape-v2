@@ -3452,6 +3452,13 @@ run(function()
         return module and module.Enabled or false
     end
 
+    local function isSigridMounted()
+        local resolver = runtimeEnvironment.BadVapeIsSigridMounted
+        if type(resolver) ~= 'function' then return false end
+        local success, mounted = pcall(resolver)
+        return success and mounted == true
+    end
+
     InfiniteJump = vape.Categories.Blatant:CreateModule({
 		Name = 'Infinite Jump',
     	Tooltip = 'Allows you to jump infinitely.',
@@ -3459,6 +3466,7 @@ run(function()
 			if callback then
 				jumps = 0
 				local oldY
+				local dipCharacter
 				local jumpArmed = false
 				local held = false
 
@@ -3466,15 +3474,17 @@ run(function()
 					if not oldY then
 						return
 					end
-					if entitylib.isAlive then
+					if entitylib.isAlive and dipCharacter == lplr.Character then
 						local root = entitylib.character.RootPart
 						root.CFrame = CFrame.lookAlong(Vector3.new(root.Position.X, oldY, root.Position.Z), root.CFrame.LookVector)
 					end
 					oldY = nil
+					dipCharacter = nil
 				end
 
 				InfiniteJump:Clean(restoreHeight)
 				InfiniteJump:Clean(inputService.InputBegan:Connect(function(input)
+					if not InfiniteJump.Enabled then return end
 					if not inputService:GetFocusedTextBox()
 						and (input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA)
 						and not held then
@@ -3491,6 +3501,7 @@ run(function()
 					pcall(function()
 						local jumpButton = lplr.PlayerGui.TouchGui.TouchControlFrame.JumpButton
 						InfiniteJump:Clean(jumpButton.InputBegan:Connect(function(input)
+							if not InfiniteJump.Enabled then return end
 							if input.UserInputType == Enum.UserInputType.Touch then
 								jumpArmed = true
 							end
@@ -3499,7 +3510,7 @@ run(function()
 				end
 
 				InfiniteJump:Clean(inputService.JumpRequest:Connect(function()
-					if not entitylib.isAlive or (not jumpArmed and not Hold.Enabled) then return end
+					if not InfiniteJump.Enabled or not entitylib.isAlive or (not jumpArmed and not Hold.Enabled) then return end
 					jumpArmed = false
     				jumps += 1
     				if jumps > 1 and Mode.Value == 'Velocity' then
@@ -3515,7 +3526,10 @@ run(function()
 				end))
 
 				repeat
-					if oldY then
+					if not InfiniteJump.Enabled then break end
+					if isSigridMounted() then
+						restoreHeight()
+					elseif oldY then
 						restoreHeight()
 						task.wait(0.1)
 					elseif entitylib.isAlive and TPDown.Enabled and entitylib.character.AirTime
@@ -3532,6 +3546,7 @@ run(function()
 							local ray = workspace:Raycast(root.Position, Vector3.new(0, -1000, 0), rayParams)
 							if isValidGroundRay(ray, entitylib.character.Humanoid) then
 								oldY = root.Position.Y
+								dipCharacter = lplr.Character
 								entitylib.character.Humanoid:ChangeState(Enum.HumanoidStateType.Landed)
 								root.AssemblyLinearVelocity = Vector3.new(0, -2.5, 0)
 								root.CFrame = CFrame.lookAlong(
