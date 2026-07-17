@@ -302,27 +302,6 @@ local function finishLoading()
 
 	if not shared.BadVapeIndependent then
 		local teleportUid = tostring(license.Key or ''):lower()
-		local function currentExecutorName()
-			local environment = type(runtimeEnvironment) == 'table' and runtimeEnvironment or {}
-			local identifiers, seen = {}, {}
-			local function addIdentifier(candidate)
-				if type(candidate) == 'function' and not seen[candidate] then
-					seen[candidate] = true
-					table.insert(identifiers, candidate)
-				end
-			end
-			addIdentifier(environment.identifyexecutor)
-			addIdentifier(environment.getexecutorname)
-			addIdentifier(identifyexecutor)
-			addIdentifier(getexecutorname)
-			for _, identify in identifiers do
-				local success, name = pcall(identify)
-				if success and type(name) == 'string' and name ~= '' then
-					return name
-				end
-			end
-			return ''
-		end
 		if #teleportUid >= 1 and #teleportUid <= 24 and teleportUid:match('^%l[%w_]*$') then
 			local encodedUid = httpService:JSONEncode(teleportUid)
 			local encodedFolder = httpService:JSONEncode(runtimeFolder)
@@ -343,9 +322,6 @@ local function finishLoading()
 			if shared.BadVapeCustomProfile then
 				teleportScript = 'shared.BadVapeCustomProfile = '
 					..httpService:JSONEncode(tostring(shared.BadVapeCustomProfile))..'\n'..teleportScript
-			end
-			if currentExecutorName():lower():find('potassium', 1, true) then
-				teleportScript = 'task.wait(12)\n'..teleportScript
 			end
 			shared.BadVapeQueueTeleport('99-loader', teleportScript)
 			local queueAttempted = false
