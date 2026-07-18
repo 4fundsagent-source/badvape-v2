@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-172c623e336c0ba4197fa0452ec660ed715e4a8bd3481b2ac6b6298f6ca0fca4",
+  "revision": "sha256-5a70fe7058305d77de76def99c09ef8e93ff385448170dec17ae000686c4473c",
   "files": [
     {
       "path": "games/11156779721.lua",
@@ -59,8 +59,8 @@
     },
     {
       "path": "games/6872274481.lua",
-      "bytes": 1123667,
-      "sha256": "d13c8f482eed150af3951948635065fc055146c0c397b334df2fd2664006eda4"
+      "bytes": 1123932,
+      "sha256": "306e19c9675ea2a029f4fe09a05a89e76a8ead0f93e03ff8c070df01c43df03a"
     },
     {
       "path": "games/77790193039862.lua",
