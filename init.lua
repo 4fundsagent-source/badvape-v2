@@ -326,6 +326,7 @@ local publicGamePaths = {
 	['games/139566161526375.lua'] = true,
 	['games/142823291.lua'] = true,
 	['games/155615604.lua'] = true,
+	['games/17625359962.lua'] = true,
 	['games/5938036553.lua'] = true,
 	['games/606849621.lua'] = true,
 	['games/6872265039.lua'] = true,
@@ -341,6 +342,8 @@ local publicGamePaths = {
 	['games/8444591321.lua'] = true,
 	['games/8560631822.lua'] = true,
 	['games/universal.lua'] = true,
+	['games/117398147513099.lua'] = true,
+	['games/133215910299950.lua'] = true,
 }
 local publicLibraryPaths = {
 	['libraries/badvape-theme.lua'] = true,
@@ -398,6 +401,12 @@ local gameDependencyPaths = {
 	[8560631822] = {
 		['games/6872274481.lua'] = true,
 		['libraries/cheatenginelib.lua'] = true,
+	},
+	[117398147513099] = {
+		['games/17625359962.lua'] = true,
+	},
+	[133215910299950] = {
+		['games/17625359962.lua'] = true,
 	},
 	[606849621] = {
 		['libraries/vm.lua'] = true,
