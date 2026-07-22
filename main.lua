@@ -461,7 +461,17 @@ local function loadGameModule(placeId)
 	end
 
 	shared.BadVapeProtectedFailure = nil
-	local ok, loaded = runSource(gameSource, tostring(placeId), license)
+	-- The first Rivals protected release captured the legacy `shared.vape`
+	-- name before the public runtime standardized on `shared.BadVape`. Keep the
+	-- compatibility alias scoped to game-module execution so that already-issued
+	-- protected bytes work without leaking or replacing another runtime's value.
+	local previousLegacyVape = shared.vape
+	shared.vape = vape
+	local results = table.pack(runSource(gameSource, tostring(placeId), license))
+	if shared.vape == vape then
+		shared.vape = previousLegacyVape
+	end
+	local ok, loaded = table.unpack(results, 1, results.n)
 	if not ok or loaded == false then
 		local protectedFailure = type(shared.BadVapeProtectedFailure) == 'table'
 			and shared.BadVapeProtectedFailure or nil
