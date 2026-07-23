@@ -450,6 +450,38 @@ local rivalsProfilePlaces = {
 	[129604661913557] = 133215910299950,
 }
 
+local protectedAuthReasonMessages = {
+	ambiguous_hwid = 'Your executor sent conflicting device IDs. Disable HWID spoofing or custom HWID headers, or use another executor.',
+	auth_failed = 'This script credential is invalid, inactive, or for the wrong game. Run /getscript in Discord and select the game you are playing.',
+	hwid_mismatch = 'This license is linked to another device. Run /resethwid in Discord, then run /getscript and execute the new script.',
+	hwid_required = 'Your executor did not provide a device ID. Disable HWID spoofing or use a supported executor, then run /getscript.',
+	rate_limited = 'Too many authentication attempts were made. Wait one minute, then try the script again.',
+	script_outdated = 'This script is outdated. Run /getscript in Discord and execute the latest script.',
+	uid_requires_bound_device = 'Your UID script cannot link a new or reset device. Run /getscript in Discord and execute the new key-based script once.',
+}
+local protectedAuthStageMessages = {
+	credential_invalid = protectedAuthReasonMessages.auth_failed,
+	request_api_unavailable = 'Your executor does not provide a supported HTTP request function. Update it or use a supported executor.',
+	bit32_unavailable = 'Your executor is missing the bit32 functions required by authentication. Update it or use a supported executor.',
+	loadstring_unavailable = 'Your executor is missing loadstring, so BadVape cannot start. Update it or use a supported executor.',
+	http_service_unavailable = 'Your executor could not access HttpService. Rejoin and retry, or use a supported executor.',
+	request_failed = 'BadVape could not reach the authentication server. Check your connection and try again.',
+	request_encode_failed = 'Your executor could not create the authentication request. Update it or use a supported executor.',
+	response_shape_invalid = 'Your executor returned an invalid authentication response. Update it or use a supported executor.',
+	auth_response_invalid = 'The authentication response failed validation. Run /getscript in Discord and execute the latest script.',
+	release_key_invalid = protectedAuthReasonMessages.script_outdated,
+}
+
+local function protectedAuthMessage(failure)
+	if type(failure) ~= 'table' then return nil end
+	local reason = type(failure.reason) == 'string' and failure.reason or nil
+	if reason and protectedAuthReasonMessages[reason] then
+		return protectedAuthReasonMessages[reason]
+	end
+	local stage = type(failure.stage) == 'string' and failure.stage or nil
+	return stage and protectedAuthStageMessages[stage] or nil
+end
+
 local function loadGameModule(placeId)
 	vape.Place = placeId
 	local rivalsProfilePlace = rivalsProfilePlaces[placeId]
@@ -501,16 +533,24 @@ local function loadGameModule(placeId)
 			detail = detail,
 			path = gamePath,
 			placeId = placeId,
+			reason = protectedFailure and protectedFailure.reason or 'none',
 			stage = protectedFailure and protectedFailure.stage or (ok and 'module-returned-false' or 'runtime-error'),
 			status = protectedFailure and protectedFailure.status or 'none',
 		})
-		vape:CreateNotification(
-			'BadVape',
-			'Game module unavailable; loaded base modules only. '..detail:sub(1, 260)
-				..' Send '..diagnosticsPath..' to support.',
-			15,
-			'warning'
-		)
+		local authMessage = protectedAuthMessage(protectedFailure)
+		if authMessage then
+			local reference = protectedFailure.correlationId
+				and ' Support reference: '..tostring(protectedFailure.correlationId)..'.' or ''
+			vape:CreateNotification('BadVape authentication', authMessage..reference, 20, 'warning')
+		else
+			vape:CreateNotification(
+				'BadVape',
+				'Game module unavailable; loaded base modules only. '..detail:sub(1, 260)
+					..' Send '..diagnosticsPath..' to support.',
+				15,
+				'warning'
+			)
+		end
 		return false
 	end
 	recordDiagnostic('game_module_loaded', {bytes = #gameSource, path = gamePath, placeId = placeId})
