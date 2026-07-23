@@ -2,7 +2,10 @@
 local forwardedCredential = ...
 if game.PlaceId ~= 17625359962
 	and game.PlaceId ~= 117398147513099
-	and game.PlaceId ~= 133215910299950 then
+	and game.PlaceId ~= 133215910299950
+	and game.PlaceId ~= 18126510175
+	and game.PlaceId ~= 71874690745115
+	and game.PlaceId ~= 129604661913557 then
 	return false
 end-- Synchronous protected-auth template. The builder inserts an authenticated
 -- encrypted payload blob and its inline opener at the two markers below.

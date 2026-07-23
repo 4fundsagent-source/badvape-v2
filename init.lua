@@ -320,6 +320,7 @@ local baseUrls = {
 local publicGamePaths = {
 	['games/11156779721.lua'] = true,
 	['games/123804558118054.lua'] = true,
+	['games/129604661913557.lua'] = true,
 	['games/131465939650733.lua'] = true,
 	['games/13246639586.lua'] = true,
 	['games/135564683255158.lua'] = true,
@@ -327,9 +328,11 @@ local publicGamePaths = {
 	['games/142823291.lua'] = true,
 	['games/155615604.lua'] = true,
 	['games/17625359962.lua'] = true,
+	['games/18126510175.lua'] = true,
 	['games/5938036553.lua'] = true,
 	['games/606849621.lua'] = true,
 	['games/6872265039.lua'] = true,
+	['games/71874690745115.lua'] = true,
 	['games/77790193039862.lua'] = true,
 	['games/80041634734121.lua'] = true,
 	['games/8542259458.lua'] = true,
@@ -406,6 +409,15 @@ local gameDependencyPaths = {
 		['games/17625359962.lua'] = true,
 	},
 	[133215910299950] = {
+		['games/17625359962.lua'] = true,
+	},
+	[18126510175] = {
+		['games/17625359962.lua'] = true,
+	},
+	[71874690745115] = {
+		['games/17625359962.lua'] = true,
+	},
+	[129604661913557] = {
 		['games/17625359962.lua'] = true,
 	},
 	[606849621] = {
