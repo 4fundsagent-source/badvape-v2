@@ -441,8 +441,18 @@ if guiFallbackReason then
 	vape:CreateNotification('BadVape', 'The selected GUI failed, so compatibility mode was loaded: '..tostring(guiFallbackReason), 12, 'warning')
 end
 
+local rivalsProfilePlaces = {
+	[17625359962] = 17625359962,
+	[117398147513099] = 117398147513099,
+	[133215910299950] = 133215910299950,
+	[18126510175] = 17625359962,
+	[71874690745115] = 117398147513099,
+	[129604661913557] = 133215910299950,
+}
+
 local function loadGameModule(placeId)
 	vape.Place = placeId
+	local rivalsProfilePlace = rivalsProfilePlaces[placeId]
 	local gamePath = 'badvape/games/'..placeId..'.lua'
 	if diagnostics and type(diagnostics.fileState) == 'function' then
 		pcall(diagnostics.fileState, gamePath, nil, 'game-module-load')
@@ -450,6 +460,7 @@ local function loadGameModule(placeId)
 	local gameSource = readCachedFile(gamePath)
 		or shared.BadVapeDownloadFile(gamePath)
 	if type(gameSource) ~= 'string' or gameSource == '404: Not Found' then
+		if rivalsProfilePlace then vape.Place = rivalsProfilePlace end
 		recordDiagnostic('game_module_source_unavailable', {path = gamePath, placeId = placeId})
 		vape:CreateNotification(
 			'BadVape',
@@ -471,6 +482,9 @@ local function loadGameModule(placeId)
 	if shared.vape == vape then
 		shared.vape = previousLegacyVape
 	end
+	-- Rivals executes one protected canonical payload, then selects the saved
+	-- default for the concrete mode (or its closest pre-existing mode alias).
+	if rivalsProfilePlace then vape.Place = rivalsProfilePlace end
 	local ok, loaded = table.unpack(results, 1, results.n)
 	if not ok or loaded == false then
 		local protectedFailure = type(shared.BadVapeProtectedFailure) == 'table'

@@ -364,6 +364,9 @@ local seedProfilePaths = {
 	['profiles/blatant6872274481.txt'] = true,
 	['profiles/default6872265039.txt'] = true,
 	['profiles/default6872274481.txt'] = true,
+	['profiles/default117398147513099.txt'] = true,
+	['profiles/default133215910299950.txt'] = true,
+	['profiles/default17625359962.txt'] = true,
 	['profiles/gui.txt'] = true,
 }
 local releaseProfileOverridePaths = {
