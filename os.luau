@@ -412,10 +412,16 @@ repeat
 	task.wait()
 until game:IsLoaded()
 
-local localPlayer = playersService.LocalPlayer
-repeat
-	task.wait()
-until localPlayer and localPlayer:FindFirstChild('PlayerGui')
+local function waitForLocalPlayer()
+	local localPlayer
+	repeat
+		task.wait()
+		localPlayer = playersService.LocalPlayer
+	until localPlayer and localPlayer:FindFirstChild('PlayerGui')
+	return localPlayer
+end
+
+local localPlayer = waitForLocalPlayer()
 
 local mainPath = folder..'/main.lua'
 if not safeIsFile(mainPath) then

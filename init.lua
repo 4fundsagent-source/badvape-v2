@@ -217,11 +217,17 @@ local function runCachedRuntime()
 		error('failed to read cached BadVape runtime', 0)
 	end
 	diagnostics.record('runtime_compile_start', {bytes = #osSource, path = osPath})
-	local osChunk, loadError = loadstring(osSource, folder..'/os.luau')
+	local compileResult = table.pack(pcall(loadstring, osSource, folder..'/os.luau'))
+	if not compileResult[1] then
+		diagnostics.record('runtime_compile_failed', {error = compileResult[2], path = osPath})
+		error(compileResult[2] or 'BadVape runtime rejected', 0)
+	end
+	local osChunk, loadError = compileResult[2], compileResult[3]
 	if type(osChunk) ~= 'function' then
 		diagnostics.record('runtime_compile_failed', {error = loadError or 'rejected', path = osPath})
 		error(loadError or 'BadVape runtime rejected', 0)
 	end
+	diagnostics.record('runtime_compile_complete', {path = osPath})
 	local function traceError(value)
 		if type(debug) == 'table' and type(debug.traceback) == 'function' then
 			local ok, trace = pcall(debug.traceback, tostring(value), 2)
@@ -229,6 +235,7 @@ local function runCachedRuntime()
 		end
 		return tostring(value)
 	end
+	diagnostics.record('runtime_execution_start', {path = osPath})
 	local runtimeResult = table.pack(xpcall(function()
 		return osChunk(forwardedLicense)
 	end, traceError))
