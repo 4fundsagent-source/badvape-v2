@@ -27,6 +27,13 @@ if type(forwardedLicense) == 'table' then
 	end
 end
 license.Key = type(license.Key) == 'string' and license.Key or nil
+local luaProtProductMarker, luaProtKey
+if license.Key then
+	luaProtProductMarker, luaProtKey = license.Key:match('^LP%-([BR])%-([a-f0-9]+)$')
+end
+if luaProtKey and #luaProtKey ~= 24 then
+	luaProtProductMarker, luaProtKey = nil, nil
+end
 local diagnostics = type(shared.BadVapeDiagnostics) == 'table' and shared.BadVapeDiagnostics or nil
 local diagnosticsPath = diagnostics and diagnostics.path
 	or (shared.BadVapeFolder or 'badvape')..'/badvape-debug.txt'
@@ -36,7 +43,8 @@ local function recordDiagnostic(event, fields)
 	end
 end
 recordDiagnostic('main_start', {
-	credentialKind = license.Key and (license.Key:match('^BV%-%u%-') and 'license' or 'uid') or 'missing',
+	credentialKind = luaProtKey and 'luaprot'
+		or (license.Key and (license.Key:match('^BV%-%u%-') and 'license' or 'uid') or 'missing'),
 	placeId = game.PlaceId,
 })
 repeat task.wait() until game:IsLoaded()
@@ -301,9 +309,19 @@ local function finishLoading()
 	end)
 
 	if not shared.BadVapeIndependent then
-		local teleportUid = tostring(license.Key or ''):lower()
-		if #teleportUid >= 1 and #teleportUid <= 24 and teleportUid:match('^%l[%w_]*$') then
-			local encodedUid = httpService:JSONEncode(teleportUid)
+		local teleportCredential = tostring(license.Key or '')
+		local teleportMarker, teleportLuaProtKey = teleportCredential:match('^LP%-([BR])%-([a-f0-9]+)$')
+		local teleportUid = teleportCredential:lower()
+		if teleportMarker and #teleportLuaProtKey == 24 then
+			-- Keep the product marker for local wrong-game detection. The runtime
+			-- installs only the raw key into LuaProt's global.
+		elseif #teleportUid >= 1 and #teleportUid <= 24 and teleportUid:match('^%l[%w_]*$') then
+			teleportCredential = teleportUid
+		else
+			teleportCredential = nil
+		end
+		if teleportCredential then
+			local encodedCredential = httpService:JSONEncode(teleportCredential)
 			local encodedFolder = httpService:JSONEncode(runtimeFolder)
 			local teleportScript
 			if shared.BadVapeDeveloper then
@@ -312,12 +330,12 @@ local function finishLoading()
 					..'shared.BadVapeFolder = '..encodedFolder..'\n'
 					..'local badVapeLoader, badVapeLoadError = loadstring(readfile(shared.BadVapeFolder.."/loader.lua"), "@badvape/loader.lua")\n'
 					..'if type(badVapeLoader) ~= "function" then error(badVapeLoadError or "BadVape local loader rejected", 0) end\n'
-					..'return badVapeLoader({Key = '..encodedUid..'})'
+					..'return badVapeLoader({Key = '..encodedCredential..'})'
 			else
 				local loaderUrl = httpService:JSONEncode('https://luvit.cc/badvape-api/loader')
 				teleportScript = 'shared.BadVapeReload = true\n'
 					..'shared.BadVapeFolder = '..encodedFolder..'\n'
-					..'loadstring(game:HttpGet('..loaderUrl..'))() { log { '..encodedUid..' } }'
+					..'loadstring(game:HttpGet('..loaderUrl..'))() { log { '..encodedCredential..' } }'
 			end
 			if shared.BadVapeCustomProfile then
 				teleportScript = 'shared.BadVapeCustomProfile = '
@@ -339,7 +357,10 @@ local function finishLoading()
 				vape:CreateNotification('BadVape', 'This executor does not support queue on teleport.', 8, 'warning')
 			end
 		elseif license.Key then
-			vape:CreateNotification('BadVape', 'Automatic teleport reload needs your UID. Run /setuid, then use /getscript.', 10, 'warning')
+			local message = license.Key:match('^BV%-%u%-')
+				and 'Automatic teleport reload needs your UID. Run /setuid, then use /getscript.'
+				or 'Automatic teleport reload needs a current script. Run /getscript in Discord.'
+			vape:CreateNotification('BadVape', message, 10, 'warning')
 		end
 	end
 
@@ -450,6 +471,113 @@ local rivalsProfilePlaces = {
 	[129604661913557] = 133215910299950,
 }
 
+local luaProtRoutes = {
+	[6872274481] = {canonicalPlace = 6872274481, productMarker = 'B', productName = 'BedWars', loaderPath = 'badvape/libraries/luaprot-bedwars.lua'},
+	[8444591321] = {canonicalPlace = 6872274481, productMarker = 'B', productName = 'BedWars', loaderPath = 'badvape/libraries/luaprot-bedwars.lua'},
+	[8560631822] = {canonicalPlace = 6872274481, productMarker = 'B', productName = 'BedWars', loaderPath = 'badvape/libraries/luaprot-bedwars.lua'},
+	[17625359962] = {canonicalPlace = 17625359962, productMarker = 'R', productName = 'Rivals', loaderPath = 'badvape/libraries/luaprot-rivals.lua'},
+	[117398147513099] = {canonicalPlace = 17625359962, productMarker = 'R', productName = 'Rivals', loaderPath = 'badvape/libraries/luaprot-rivals.lua'},
+	[133215910299950] = {canonicalPlace = 17625359962, productMarker = 'R', productName = 'Rivals', loaderPath = 'badvape/libraries/luaprot-rivals.lua'},
+	[18126510175] = {canonicalPlace = 17625359962, productMarker = 'R', productName = 'Rivals', loaderPath = 'badvape/libraries/luaprot-rivals.lua'},
+	[71874690745115] = {canonicalPlace = 17625359962, productMarker = 'R', productName = 'Rivals', loaderPath = 'badvape/libraries/luaprot-rivals.lua'},
+	[129604661913557] = {canonicalPlace = 17625359962, productMarker = 'R', productName = 'Rivals', loaderPath = 'badvape/libraries/luaprot-rivals.lua'},
+}
+
+local function luaProtRuntimeEnvironments()
+	local environments, seen = {}, {}
+	local function add(environment)
+		if type(environment) == 'table' and not seen[environment] then
+			seen[environment] = true
+			table.insert(environments, environment)
+		end
+	end
+	add(runtimeEnvironment)
+	if type(getfenv) == 'function' then
+		local ok, environment = pcall(getfenv, 0)
+		if ok then add(environment) end
+	end
+	add(type(_G) == 'table' and _G or nil)
+	return environments
+end
+
+local function installLuaProtKey(key)
+	local installed = false
+	for _, environment in luaProtRuntimeEnvironments() do
+		local ok = pcall(rawset, environment, 'lp_key', key)
+		installed = installed or (ok and rawget(environment, 'lp_key') == key)
+	end
+	return installed
+end
+
+local function rawEnvironmentValue(environment, key)
+	local ok, value = pcall(rawget, environment, key)
+	return ok and value or nil
+end
+
+local function addLuaProtRequestAdapter(adapters, seen, candidate)
+	if type(candidate) == 'function' and not seen[candidate] then
+		seen[candidate] = true
+		table.insert(adapters, candidate)
+	end
+end
+
+local function installLuaProtRequestCompatibility()
+	local environments = luaProtRuntimeEnvironments()
+	local adapters, seen = {}, {}
+	for _, environment in environments do
+		local httpLibrary = rawEnvironmentValue(environment, 'http')
+		addLuaProtRequestAdapter(adapters, seen, type(httpLibrary) == 'table'
+			and rawEnvironmentValue(httpLibrary, 'request') or nil)
+		addLuaProtRequestAdapter(adapters, seen, rawEnvironmentValue(environment, 'request'))
+		addLuaProtRequestAdapter(adapters, seen, rawEnvironmentValue(environment, 'http_request'))
+		for _, namespace in {'syn', 'fluxus', 'krnl'} do
+			local library = rawEnvironmentValue(environment, namespace)
+			addLuaProtRequestAdapter(adapters, seen, type(library) == 'table'
+				and rawEnvironmentValue(library, 'request') or nil)
+		end
+	end
+	if #adapters == 0 then return false, function() end end
+
+	local selected = adapters[1]
+	local changes, touched = {}, {}
+	local function install(target, field)
+		if type(target) ~= 'table' then return end
+		touched[target] = touched[target] or {}
+		if touched[target][field] then return end
+		touched[target][field] = true
+		local previous = rawEnvironmentValue(target, field)
+		if type(previous) == 'function' then return end
+		local ok = pcall(rawset, target, field, selected)
+		if ok and rawEnvironmentValue(target, field) == selected then
+			table.insert(changes, {target = target, field = field, previous = previous})
+		end
+	end
+	for _, environment in environments do
+		install(environment, 'request')
+		install(rawEnvironmentValue(environment, 'http'), 'request')
+	end
+
+	local usable = false
+	for _, environment in environments do
+		local httpLibrary = rawEnvironmentValue(environment, 'http')
+		local httpRequest = type(httpLibrary) == 'table'
+			and rawEnvironmentValue(httpLibrary, 'request') or nil
+		local directRequest = rawEnvironmentValue(environment, 'request')
+		local selectedByLoader = httpLibrary and httpRequest or directRequest
+		usable = usable or type(selectedByLoader) == 'function'
+	end
+
+	local function restore()
+		for index = #changes, 1, -1 do
+			local change = changes[index]
+			if rawEnvironmentValue(change.target, change.field) == selected then
+				pcall(rawset, change.target, change.field, change.previous)
+			end
+		end
+	end
+	return usable, restore
+end
+
 local protectedAuthReasonMessages = {
 	ambiguous_hwid = 'Your executor sent conflicting device IDs. Disable HWID spoofing or custom HWID headers, or use another executor.',
 	auth_failed = 'This script credential is invalid, inactive, or for the wrong game. Run /getscript in Discord and select the game you are playing.',
@@ -485,7 +613,35 @@ end
 local function loadGameModule(placeId)
 	vape.Place = placeId
 	local rivalsProfilePlace = rivalsProfilePlaces[placeId]
-	local gamePath = 'badvape/games/'..placeId..'.lua'
+	local luaProtRoute = luaProtKey and luaProtRoutes[placeId] or nil
+	if luaProtKey and not luaProtRoute then
+		recordDiagnostic('luaprot_route_unavailable', {placeId = placeId})
+		vape:CreateNotification(
+			'BadVape authentication',
+			'This LuaProt script is not available in the current game. Run /getscript and select the game you are playing.',
+			20,
+			'warning'
+		)
+		return false
+	end
+	if luaProtRoute and luaProtRoute.productMarker ~= luaProtProductMarker then
+		local credentialProduct = luaProtProductMarker == 'B' and 'BedWars' or 'Rivals'
+		recordDiagnostic('luaprot_product_mismatch', {
+			credentialProduct = credentialProduct,
+			placeId = placeId,
+			placeProduct = luaProtRoute.productName,
+		})
+		vape:CreateNotification(
+			'BadVape authentication',
+			'This script is for '..credentialProduct..', but you are playing '
+				..luaProtRoute.productName..'. Run /getscript and select '
+				..luaProtRoute.productName..'.',
+			20,
+			'warning'
+		)
+		return false
+	end
+	local gamePath = luaProtRoute and luaProtRoute.loaderPath or 'badvape/games/'..placeId..'.lua'
 	if diagnostics and type(diagnostics.fileState) == 'function' then
 		pcall(diagnostics.fileState, gamePath, nil, 'game-module-load')
 	end
@@ -504,6 +660,33 @@ local function loadGameModule(placeId)
 	end
 
 	shared.BadVapeProtectedFailure = nil
+	local restoreLuaProtRequest = function() end
+	if luaProtRoute then
+		if not installLuaProtKey(luaProtKey) then
+			recordDiagnostic('luaprot_environment_unavailable', {path = gamePath, placeId = placeId})
+			vape:CreateNotification(
+				'BadVape authentication',
+				'Your executor could not initialize LuaProt. Update it or use a supported executor, then run /getscript again.',
+				20,
+				'warning'
+			)
+			return false
+		end
+		local requestReady
+		requestReady, restoreLuaProtRequest = installLuaProtRequestCompatibility()
+		if not requestReady then
+			recordDiagnostic('luaprot_request_adapter_unavailable', {path = gamePath, placeId = placeId})
+			vape:CreateNotification(
+				'BadVape authentication',
+				'Your executor does not provide a supported HTTP request function. Update it or use a supported executor.',
+				20,
+				'warning'
+			)
+			return false
+		end
+		vape.Place = luaProtRoute.canonicalPlace
+		recordDiagnostic('luaprot_loader_start', {path = gamePath, placeId = placeId})
+	end
 	-- The first Rivals protected release captured the legacy `shared.vape`
 	-- name before the public runtime standardized on `shared.BadVape`. Keep the
 	-- compatibility alias scoped to game-module execution so that already-issued
@@ -511,6 +694,7 @@ local function loadGameModule(placeId)
 	local previousLegacyVape = shared.vape
 	shared.vape = vape
 	local results = table.pack(runSource(gameSource, tostring(placeId), license))
+	restoreLuaProtRequest()
 	if shared.vape == vape then
 		shared.vape = previousLegacyVape
 	end
@@ -552,6 +736,9 @@ local function loadGameModule(placeId)
 			)
 		end
 		return false
+	end
+	if luaProtRoute then
+		recordDiagnostic('luaprot_loader_complete', {path = gamePath, placeId = placeId})
 	end
 	recordDiagnostic('game_module_loaded', {bytes = #gameSource, path = gamePath, placeId = placeId})
 	return true

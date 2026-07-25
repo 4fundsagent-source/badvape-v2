@@ -19,6 +19,13 @@ local diagnosticLines = {
 local diagnosticStarted = type(os) == 'table' and type(os.clock) == 'function' and os.clock() or 0
 local forwardedSecret = type(forwardedLicense) == 'table' and forwardedLicense.Key
 forwardedSecret = type(forwardedSecret) == 'string' and forwardedSecret or nil
+local forwardedLuaProtMarker, forwardedLuaProtSecret
+if forwardedSecret then
+	forwardedLuaProtMarker, forwardedLuaProtSecret = forwardedSecret:match('^LP%-([BR])%-([a-f0-9]+)$')
+end
+if forwardedLuaProtSecret and #forwardedLuaProtSecret ~= 24 then
+	forwardedLuaProtMarker, forwardedLuaProtSecret = nil, nil
+end
 
 local function replacePlain(value, needle, replacement)
 	if type(value) ~= 'string' or type(needle) ~= 'string' or needle == '' then
@@ -42,6 +49,9 @@ local function diagnosticValue(value)
 	value = tostring(value)
 	if forwardedSecret and forwardedSecret ~= '' then
 		value = replacePlain(value, forwardedSecret, '<credential-redacted>')
+	end
+	if forwardedLuaProtSecret then
+		value = replacePlain(value, forwardedLuaProtSecret, '<credential-redacted>')
 	end
 	value = value:gsub('BV%-%u%-[%w]+', '<license-redacted>')
 	value = value:gsub("([\"']?[Kk][Ee][Yy][\"']?%s*[:=]%s*[\"']?)[^%s,;\"'}]+", '%1<redacted>')
@@ -120,7 +130,8 @@ local function identifyExecutor()
 end
 
 diagnostics.record('installer_start', {
-	credentialKind = forwardedSecret and (forwardedSecret:match('^BV%-%u%-') and 'license' or 'uid') or 'missing',
+	credentialKind = forwardedLuaProtSecret and 'luaprot'
+		or (forwardedSecret and (forwardedSecret:match('^BV%-%u%-') and 'license' or 'uid') or 'missing'),
 	executor = identifyExecutor(),
 	folder = folder,
 	gameId = game.GameId,
@@ -361,6 +372,8 @@ local publicLibraryPaths = {
 	['libraries/cheatenginelib.lua'] = true,
 	['libraries/entity.lua'] = true,
 	['libraries/hash.lua'] = true,
+	['libraries/luaprot-bedwars.lua'] = true,
+	['libraries/luaprot-rivals.lua'] = true,
 	['libraries/prediction.lua'] = true,
 	['libraries/string.lua'] = true,
 	['libraries/vm.lua'] = true,
@@ -397,6 +410,8 @@ local commonInstallPaths = {
 	['libraries/badvape-theme.lua'] = true,
 	['libraries/entity.lua'] = true,
 	['libraries/hash.lua'] = true,
+	['libraries/luaprot-bedwars.lua'] = true,
+	['libraries/luaprot-rivals.lua'] = true,
 	['libraries/prediction.lua'] = true,
 	['libraries/string.lua'] = true,
 	['profiles/features.json'] = true,

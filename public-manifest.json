@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-6279a526aa636cf2b633d8410021d80aa88b6862eec0daa4c28e39116f73e26b",
+  "revision": "sha256-3acaa5d53056059d773f6e17a1ec9acba743c6d21e063b44b7d69eb510065cfe",
   "files": [
     {
       "path": "games/11156779721.lua",
@@ -149,18 +149,18 @@
     },
     {
       "path": "guis/new.lua",
-      "bytes": 248854,
-      "sha256": "637347e71fb939e4ea264b3135574936d344161b5d11e3b7ca088b643f438273"
+      "bytes": 248923,
+      "sha256": "08dbc18da3825eccac03d402f505b9d6cfa980186e28c9d7b17dac528dd2ae3d"
     },
     {
       "path": "guis/old.lua",
-      "bytes": 143571,
-      "sha256": "1b2c7b1af45ff001396905f6d93a77188192e9e643c2ec6b1a4830343c819c76"
+      "bytes": 143640,
+      "sha256": "550b5fab615bbed3dcb28f5d1a5110cec72da2a968d33e49ccd6fe525990acb5"
     },
     {
       "path": "init.lua",
-      "bytes": 33944,
-      "sha256": "91d520794916e7c22046816035ae218aa54c64eeddd557f83da64c55c1d99d53"
+      "bytes": 34584,
+      "sha256": "248ca6129f7da321c71bb4faaf78b3d6a830ae298ae3231b62ee700f7616cd92"
     },
     {
       "path": "libraries/badvape-theme.lua",
@@ -188,6 +188,16 @@
       "sha256": "1543ee8bb4dd7b4c4cdac33410e176a5fcd597fc314a63336c04b23fc308f90d"
     },
     {
+      "path": "libraries/luaprot-bedwars.lua",
+      "bytes": 1365,
+      "sha256": "24832343516de5fe09a0cc65b9e52d7d6be5f7d43ac4aaa3d8930dd9d581997c"
+    },
+    {
+      "path": "libraries/luaprot-rivals.lua",
+      "bytes": 1364,
+      "sha256": "6772c6b976864bdebe541214615e4ec478cbad3d286f9fd063bb9d1c7affc89c"
+    },
+    {
       "path": "libraries/prediction.lua",
       "bytes": 7233,
       "sha256": "76b01dc18263d91ca578851248cfaa4cc145c092842aafdfa50b8a5b35930d24"
@@ -209,8 +219,8 @@
     },
     {
       "path": "main.lua",
-      "bytes": 22896,
-      "sha256": "0a24a3f2028dd7d379601d21965f96e82d532cd31eb4e842c6cd2255e1818b34"
+      "bytes": 30681,
+      "sha256": "2400b3e63a21458ee5737c1b36db61d5f8a3544672d139652835fbdaaaf0ed58"
     },
     {
       "path": "os.luau",
