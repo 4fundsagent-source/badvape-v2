@@ -586,6 +586,8 @@ local protectedAuthReasonMessages = {
 	rate_limited = 'Too many authentication attempts were made. Wait one minute, then try the script again.',
 	script_outdated = 'This script is outdated. Run /getscript in Discord and execute the latest script.',
 	uid_requires_bound_device = 'Your UID script cannot link a new or reset device. Run /getscript in Discord and execute the new key-based script once.',
+	provider_runtime_failed = 'LuaProt could not finish loading the protected game module. Rejoin, run /getscript again, and send badvape/badvape-debug.txt to support if it repeats.',
+	provider_runtime_timeout = 'LuaProt took too long to finish loading the protected game module. Rejoin, run /getscript again, and send badvape/badvape-debug.txt to support if it repeats.',
 }
 local protectedAuthStageMessages = {
 	credential_invalid = protectedAuthReasonMessages.auth_failed,
@@ -661,6 +663,7 @@ local function loadGameModule(placeId)
 
 	shared.BadVapeProtectedFailure = nil
 	local restoreLuaProtRequest = function() end
+	local luaProtLoadSignal
 	if luaProtRoute then
 		if not installLuaProtKey(luaProtKey) then
 			recordDiagnostic('luaprot_environment_unavailable', {path = gamePath, placeId = placeId})
@@ -685,6 +688,11 @@ local function loadGameModule(placeId)
 			return false
 		end
 		vape.Place = luaProtRoute.canonicalPlace
+		luaProtLoadSignal = {
+			productMarker = luaProtRoute.productMarker,
+			state = 'pending',
+		}
+		shared.BadVapeLuaProtLoadSignal = luaProtLoadSignal
 		recordDiagnostic('luaprot_loader_start', {path = gamePath, placeId = placeId})
 	end
 	-- The first Rivals protected release captured the legacy `shared.vape`
@@ -694,6 +702,43 @@ local function loadGameModule(placeId)
 	local previousLegacyVape = shared.vape
 	shared.vape = vape
 	local results = table.pack(runSource(gameSource, tostring(placeId), license))
+	if luaProtLoadSignal and results[1] and results[2] ~= false then
+		local waitStarted = os.clock()
+		local waitDeadline = waitStarted + 30
+		recordDiagnostic('luaprot_payload_wait_start', {path = gamePath, placeId = placeId})
+		while luaProtLoadSignal.state == 'pending' and os.clock() < waitDeadline do
+			task.wait()
+		end
+
+		local elapsedMs = math.floor(math.max(os.clock() - waitStarted, 0) * 1000)
+		if luaProtLoadSignal.state == 'complete' then
+			recordDiagnostic('luaprot_payload_wait_complete', {
+				elapsedMs = elapsedMs,
+				path = gamePath,
+				placeId = placeId,
+			})
+		else
+			local timedOut = luaProtLoadSignal.state == 'pending'
+			local reason = timedOut and 'provider_runtime_timeout' or 'provider_runtime_failed'
+			local detail = timedOut and 'protected payload completion timed out'
+				or 'protected payload reported a loading failure'
+			shared.BadVapeProtectedFailure = {
+				detail = detail,
+				reason = reason,
+				stage = 'provider_runtime',
+			}
+			recordDiagnostic('luaprot_payload_wait_failed', {
+				elapsedMs = elapsedMs,
+				path = gamePath,
+				placeId = placeId,
+				reason = reason,
+			})
+			results = table.pack(false, detail)
+		end
+	end
+	if luaProtLoadSignal and shared.BadVapeLuaProtLoadSignal == luaProtLoadSignal then
+		shared.BadVapeLuaProtLoadSignal = nil
+	end
 	restoreLuaProtRequest()
 	if shared.vape == vape then
 		shared.vape = previousLegacyVape

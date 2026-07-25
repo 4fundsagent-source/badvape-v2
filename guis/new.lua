@@ -5749,6 +5749,18 @@ function mainapi:Remove(obj)
 		if self.ThreadFix then
 			setthreadidentity(8)
 		end
+		if newobj.Enabled and type(newobj.Toggle) == 'function' then
+			pcall(newobj.Toggle, newobj, true)
+		end
+		local connections = rawget(newobj, 'Connections')
+		if type(connections) == 'table' then
+			for _, connection in connections do
+				pcall(function()
+					connection:Disconnect()
+				end)
+			end
+			table.clear(connections)
+		end
 
 		for _, v in {'Object', 'Children', 'Toggle', 'Button'} do
 			local childobj = typeof(newobj[v]) == 'table' and newobj[v].Object or newobj[v]
@@ -5758,7 +5770,9 @@ function mainapi:Remove(obj)
 			end
 		end
 
-		loopClean(newobj)
+		-- Keep the detached Lua state alive until any asynchronous disable callback
+		-- finishes. Recursively clearing it here left already-scheduled callbacks
+		-- indexing erased options when a game-specific module replaced a universal one.
 		tab[obj] = nil
 	end
 end
