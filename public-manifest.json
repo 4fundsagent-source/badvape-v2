@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-84cfac0e7c71b0d807a93eefc803698838e10e1aec624d574cfab16906d0ca6c",
+  "revision": "sha256-b293e5c324b0ad63bbe2307a561d9f5e9d3edb9437e00c7728d71d781d569a6c",
   "files": [
     {
       "path": "games/11156779721.lua",
@@ -234,8 +234,8 @@
     },
     {
       "path": "profiles/2619619496.gui.txt",
-      "bytes": 1480,
-      "sha256": "c140a768c804fd29edbf9014a2cf0a77ee5453985fde3b32d63c235d76ce858f"
+      "bytes": 1424,
+      "sha256": "fa03666a6109422c3b9b838628d1eadc822e3220f88b6993c10fa8250953ed5b"
     },
     {
       "path": "profiles/blatant6872265039.txt",
@@ -244,8 +244,8 @@
     },
     {
       "path": "profiles/blatant6872274481.txt",
-      "bytes": 41444,
-      "sha256": "b623d23181712dc75ba206e4627150f16d69df82b2f6e5646b17d6011b5b9901"
+      "bytes": 49681,
+      "sha256": "e09b46829c1d52af5d4866809d3e39e19ddc2a5b1b0ab139dfa31d5bd50ffec4"
     },
     {
       "path": "profiles/default117398147513099.txt",
