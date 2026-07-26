@@ -362,6 +362,7 @@ local publicGamePaths = {
 	['games/6872274481.lua'] = true,
 	['games/8444591321.lua'] = true,
 	['games/8560631822.lua'] = true,
+	['games/madebyirony.lua'] = true,
 	['games/universal.lua'] = true,
 	['games/117398147513099.lua'] = true,
 	['games/133215910299950.lua'] = true,
@@ -420,14 +421,17 @@ local commonInstallPaths = {
 
 local gameDependencyPaths = {
 	[6872274481] = {
+		['games/madebyirony.lua'] = true,
 		['libraries/cheatenginelib.lua'] = true,
 	},
 	[8444591321] = {
 		['games/6872274481.lua'] = true,
+		['games/madebyirony.lua'] = true,
 		['libraries/cheatenginelib.lua'] = true,
 	},
 	[8560631822] = {
 		['games/6872274481.lua'] = true,
+		['games/madebyirony.lua'] = true,
 		['libraries/cheatenginelib.lua'] = true,
 	},
 	[117398147513099] = {
