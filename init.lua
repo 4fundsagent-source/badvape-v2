@@ -149,12 +149,15 @@ local capabilityFluxus = type(capabilityEnvironment.fluxus) == 'table' and capab
 	or type(fluxus) == 'table' and fluxus or nil
 local capabilityKrnl = type(capabilityEnvironment.krnl) == 'table' and capabilityEnvironment.krnl
 	or type(krnl) == 'table' and krnl or nil
+local capabilityHttp = type(capabilityEnvironment.http) == 'table' and capabilityEnvironment.http
+	or type(http) == 'table' and http or nil
 local capabilityCrypt = type(capabilityEnvironment.crypt) == 'table' and capabilityEnvironment.crypt
 	or type(crypt) == 'table' and crypt or nil
 local capabilityCrypto = type(capabilityEnvironment.crypto) == 'table' and capabilityEnvironment.crypto
 	or type(crypto) == 'table' and crypto or nil
 local requestDirect = type(capabilityEnvironment.request) == 'function'
 	or type(capabilityEnvironment.http_request) == 'function'
+	or capabilityHttp and type(capabilityHttp.request) == 'function'
 	or type(request) == 'function'
 	or type(http_request) == 'function'
 local requestSyn = capabilitySyn and type(capabilitySyn.request) == 'function' or false
@@ -192,6 +195,45 @@ diagnostics.record('executor_capabilities', {
 	taskWait = type(task) == 'table' and type(task.wait) == 'function',
 	writefile = type(writefile) == 'function',
 })
+
+local httpAdapters, seenHttpAdapters = {}, {}
+local function addHttpAdapter(candidate)
+	if type(candidate) == 'function' and not seenHttpAdapters[candidate] then
+		seenHttpAdapters[candidate] = true
+		table.insert(httpAdapters, candidate)
+	end
+end
+addHttpAdapter(capabilityHttp and capabilityHttp.request or nil)
+addHttpAdapter(capabilityEnvironment.request)
+addHttpAdapter(capabilityEnvironment.http_request)
+addHttpAdapter(type(request) == 'function' and request or nil)
+addHttpAdapter(type(http_request) == 'function' and http_request or nil)
+addHttpAdapter(capabilitySyn and capabilitySyn.request or nil)
+addHttpAdapter(capabilityFluxus and capabilityFluxus.request or nil)
+addHttpAdapter(capabilityKrnl and capabilityKrnl.request or nil)
+
+local function compatibleHttpGet(url, cache)
+	local ok, body = pcall(game.HttpGet, game, url, cache)
+	if ok and type(body) == 'string' and body ~= '' and body ~= '404: Not Found' then
+		return body
+	end
+	local lastError = ok and 'empty response' or body
+	for _, adapter in ipairs(httpAdapters) do
+		local requestOk, response = pcall(adapter, {Url = url, Method = 'GET'})
+		local status = requestOk and type(response) == 'table'
+			and tonumber(response.StatusCode or response.Status) or nil
+		local responseBody = requestOk and type(response) == 'table'
+			and (response.Body or response.body) or nil
+		if (status == 200 or status == 201)
+			and type(responseBody) == 'string'
+			and responseBody ~= ''
+			and responseBody ~= '404: Not Found' then
+			return responseBody
+		end
+		lastError = requestOk and 'status '..tostring(status or 'unknown') or response
+	end
+	error(tostring(lastError or 'download failed'), 0)
+end
 
 local function safeIsFile(path)
 	if isfile then
@@ -275,7 +317,7 @@ end
 
 local releaseRef, releaseStrategy
 for attempt = 1, 3 do
-	local refOk, refBody = pcall(game.HttpGet, game,
+	local refOk, refBody = pcall(compatibleHttpGet,
 		'https://api.github.com/repos/'..owner..'/'..repo..'/commits/'..branch, true)
 	if refOk and type(refBody) == 'string' then
 		local decodeOk, refData = pcall(httpService.JSONDecode, httpService, refBody)
@@ -516,6 +558,7 @@ local function isPublicPath(path)
 	end
 
 	if path == 'init.lua'
+		or path == 'bootstrap.lua'
 		or path == 'loader.lua'
 		or path == 'main.lua'
 		or path == 'os.luau'
@@ -577,7 +620,7 @@ local function validateManifest(manifest)
 end
 
 local function fetch(url)
-	local ok, body = pcall(game.HttpGet, game, url, true)
+	local ok, body = pcall(compatibleHttpGet, url, true)
 	if not ok then
 		return nil, body
 	end

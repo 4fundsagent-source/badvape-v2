@@ -332,10 +332,23 @@ local function finishLoading()
 					..'if type(badVapeLoader) ~= "function" then error(badVapeLoadError or "BadVape local loader rejected", 0) end\n'
 					..'return badVapeLoader({Key = '..encodedCredential..'})'
 			else
-				local loaderUrl = httpService:JSONEncode('https://luvit.cc/badvape-api/loader')
+				local loaderUrl = httpService:JSONEncode(
+					'https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/main/bootstrap.lua'
+				)
 				teleportScript = 'shared.BadVapeReload = true\n'
 					..'shared.BadVapeFolder = '..encodedFolder..'\n'
-					..'loadstring(game:HttpGet('..loaderUrl..'))() { log { '..encodedCredential..' } }'
+					..'local u = '..loaderUrl..'\n'
+					..'local s\n'
+					..'pcall(function() s = game:HttpGet(u, true) end)\n'
+					..'if type(s) ~= "string" or s == "" then\n'
+					..'  local h = type(http) == "table" and http or nil\n'
+					..'  local q = h and h.request or request\n'
+					..'  local r = q({Url = u, Method = "GET"})\n'
+					..'  s = r and (r.Body or r.body)\n'
+					..'end\n'
+					..'local b, e = loadstring(s, "@badvape/bootstrap")\n'
+					..'if type(b) ~= "function" then error(e or "BadVape bootstrap rejected", 0) end\n'
+					..'return b('..encodedCredential..')'
 			end
 			if shared.BadVapeCustomProfile then
 				teleportScript = 'shared.BadVapeCustomProfile = '
