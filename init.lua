@@ -1,7 +1,7 @@
 -- BadVape public runtime installer.
 -- The manifest is an explicit allowlist; private game source is never part of it.
 
-local forwardedLicense = ...
+local forwardedLicense, installerTransport = ...
 local httpService = game:GetService('HttpService')
 
 local owner = '4fundsagent-source'
@@ -143,6 +143,15 @@ if type(getgenv) == 'function' then
 	local ok, environment = pcall(getgenv)
 	if ok and type(environment) == 'table' then capabilityEnvironment = environment end
 end
+local forwardedRequestAdapters = {}
+if type(installerTransport) == 'table' and type(installerTransport.requestAdapters) == 'table' then
+	for _, candidate in ipairs(installerTransport.requestAdapters) do
+		if type(candidate) == 'function' then
+			table.insert(forwardedRequestAdapters, candidate)
+		end
+	end
+end
+installerTransport = nil
 local capabilitySyn = type(capabilityEnvironment.syn) == 'table' and capabilityEnvironment.syn
 	or type(syn) == 'table' and syn or nil
 local capabilityFluxus = type(capabilityEnvironment.fluxus) == 'table' and capabilityEnvironment.fluxus
@@ -160,6 +169,7 @@ local requestDirect = type(capabilityEnvironment.request) == 'function'
 	or capabilityHttp and type(capabilityHttp.request) == 'function'
 	or type(request) == 'function'
 	or type(http_request) == 'function'
+	or #forwardedRequestAdapters > 0
 local requestSyn = capabilitySyn and type(capabilitySyn.request) == 'function' or false
 local requestFluxus = capabilityFluxus and type(capabilityFluxus.request) == 'function' or false
 local requestKrnl = capabilityKrnl and type(capabilityKrnl.request) == 'function' or false
@@ -202,6 +212,9 @@ local function addHttpAdapter(candidate)
 		seenHttpAdapters[candidate] = true
 		table.insert(httpAdapters, candidate)
 	end
+end
+for _, candidate in ipairs(forwardedRequestAdapters) do
+	addHttpAdapter(candidate)
 end
 addHttpAdapter(capabilityHttp and capabilityHttp.request or nil)
 addHttpAdapter(capabilityEnvironment.request)
@@ -723,7 +736,16 @@ diagnostics.record('hash_capability', {
 	mode = hashCandidate and hashMode or 'size-only',
 	usesOwner = hashCandidate and hashUseOwner or false,
 })
+local function canonicalPublicContent(path, contents)
+	if type(contents) ~= 'string' then return contents end
+	local extension = type(path) == 'string' and path:match('%.([^.]+)$') or nil
+	if extension == 'json' or extension == 'lua' or extension == 'luau' or extension == 'txt' then
+		return contents:gsub('\r\n', '\n')
+	end
+	return contents
+end
 local function contentMatches(entry, contents)
+	contents = canonicalPublicContent(entry and entry.path, contents)
 	if type(contents) ~= 'string' or #contents ~= entry.bytes then
 		return false
 	end

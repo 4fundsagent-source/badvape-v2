@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-44a2cf555412534d5155274d3353223a891a1c967af3503dbe50577dbda19f43",
+  "revision": "sha256-c0f37282a89cdf870bc982505e3bcf583f4a035e548b28ac96cd4d5974728b80",
   "files": [
     {
       "path": "bootstrap.lua",
-      "bytes": 2742,
-      "sha256": "a201fa30e2fb7086c99690af4fbdaddd2ccef039fc4c9aef06ff512664d9c061"
+      "bytes": 2772,
+      "sha256": "02389030ca68bd19ac10a60238a0f416f0c7e51e4cfd150434e74e9c8f9e36b9"
     },
     {
       "path": "games/11156779721.lua",
@@ -169,8 +169,8 @@
     },
     {
       "path": "init.lua",
-      "bytes": 36624,
-      "sha256": "be54ea3b1615f8f5c5585c0bc9f4a70780b04438197bda68435bdc4f0773bcd8"
+      "bytes": 37515,
+      "sha256": "fd1e3fa9789889f8ac0c47aade96db35548344350f5f3773fbefd00f493ad4f4"
     },
     {
       "path": "libraries/badvape-theme.lua",

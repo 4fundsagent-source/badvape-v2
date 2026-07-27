@@ -82,4 +82,4 @@ if type(bootstrap) ~= 'function' then
 	error(compileError or 'BadVape bootstrap download failed', 0)
 end
 
-bootstrap({Key = credential})
+bootstrap({Key = credential}, {requestAdapters = adapters})
