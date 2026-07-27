@@ -67,10 +67,11 @@ local function fetch(url)
 	return nil
 end
 
+local releaseRef = '73b6f5fd22615ecb0399a5435f458d1562417cfc'
 local bootstrap, compileError
 for _, url in ipairs({
-	'https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/main/init.lua',
-	'https://cdn.jsdelivr.net/gh/4fundsagent-source/badvape-v2@main/init.lua',
+	'https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..releaseRef..'/init.lua',
+	'https://cdn.jsdelivr.net/gh/4fundsagent-source/badvape-v2@'..releaseRef..'/init.lua',
 }) do
 	local source = fetch(url)
 	if source then
@@ -82,4 +83,10 @@ if type(bootstrap) ~= 'function' then
 	error(compileError or 'BadVape bootstrap download failed', 0)
 end
 
-bootstrap({Key = credential}, {requestAdapters = adapters})
+local hasShared = type(shared) == 'table'
+local previousReleaseRef = hasShared and shared.BadVapeReleaseRef or nil
+if hasShared then shared.BadVapeReleaseRef = releaseRef end
+local result = table.pack(pcall(bootstrap, {Key = credential}, {requestAdapters = adapters}))
+if hasShared then shared.BadVapeReleaseRef = previousReleaseRef end
+if not result[1] then error(result[2], 0) end
+return table.unpack(result, 2, result.n)
