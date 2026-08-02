@@ -235,6 +235,127 @@ function module.SpawnArcTracer(origin, aimDirection, projectileSpeed, gravity, t
     end
 	task.delay(custom.Lifetime, model.Destroy, model)
 end
+
+local function finiteNumber(value)
+	return type(value) == 'number' and value == value and value > -math.huge and value < math.huge
+end
+
+local function interceptResidual(relativePosition, relativeVelocity, halfRelativeAcceleration, speed, time)
+	local offset = relativePosition + relativeVelocity * time + halfRelativeAcceleration * (time * time)
+	return offset:Dot(offset) - (speed * speed * time * time)
+end
+
+-- Solves |r + v*t + 0.5*(at-ap)*t^2| = projectileSpeed*t.  The result uses
+-- the same speed supplied by the caller, so the solved angle and transmitted
+-- velocity cannot drift apart.
+function module.SolveIntercept(origin, projectileSpeed, projectileAcceleration, targetPosition, targetVelocity, targetAcceleration, minimumTime, maximumTime)
+	if typeof(origin) ~= 'Vector3' or typeof(projectileAcceleration) ~= 'Vector3'
+		or typeof(targetPosition) ~= 'Vector3' or typeof(targetVelocity) ~= 'Vector3'
+		or typeof(targetAcceleration) ~= 'Vector3' or not finiteNumber(projectileSpeed)
+		or projectileSpeed <= eps then return nil end
+
+	minimumTime = math.max(tonumber(minimumTime) or 0, eps)
+	maximumTime = tonumber(maximumTime) or 10
+	if not finiteNumber(maximumTime) or maximumTime < minimumTime then return nil end
+
+	local relativePosition = targetPosition - origin
+	local halfRelativeAcceleration = (targetAcceleration - projectileAcceleration) * 0.5
+	local bestTime
+	local function acceptRoot(root)
+		if not finiteNumber(root) or root < minimumTime or root > maximumTime then return end
+		local residual = math.abs(interceptResidual(
+			relativePosition,
+			targetVelocity,
+			halfRelativeAcceleration,
+			projectileSpeed,
+			root
+		))
+		local scale = math.max(projectileSpeed * projectileSpeed * root * root, 1)
+		if residual <= math.max(0.05, scale * 0.001)
+			and (not bestTime or root < bestTime) then
+			bestTime = root
+		end
+	end
+
+	local c4 = halfRelativeAcceleration:Dot(halfRelativeAcceleration)
+	local c3 = 2 * targetVelocity:Dot(halfRelativeAcceleration)
+	local c2 = targetVelocity:Dot(targetVelocity)
+		+ 2 * relativePosition:Dot(halfRelativeAcceleration)
+		- projectileSpeed * projectileSpeed
+	local c1 = 2 * relativePosition:Dot(targetVelocity)
+	local c0 = relativePosition:Dot(relativePosition)
+	if math.abs(c4) > eps then
+		local roots = module.solveQuartic(c4, c3, c2, c1, c0)
+		if roots then
+			for _, root in roots do
+				acceptRoot(root)
+			end
+		end
+	elseif math.abs(c2) > eps then
+		local discriminant = c1 * c1 - 4 * c2 * c0
+		if discriminant >= 0 then
+			local squareRoot = math.sqrt(discriminant)
+			acceptRoot((-c1 - squareRoot) / (2 * c2))
+			acceptRoot((-c1 + squareRoot) / (2 * c2))
+		end
+	elseif math.abs(c1) > eps then
+		acceptRoot(-c0 / c1)
+	end
+
+	-- Numerical fallback covers near-degenerate quartics and floating-point
+	-- roots rejected by the closed form at very short ranges.
+	if not bestTime then
+		local steps = 96
+		local previousTime = minimumTime
+		local previousValue = interceptResidual(
+			relativePosition,
+			targetVelocity,
+			halfRelativeAcceleration,
+			projectileSpeed,
+			previousTime
+		)
+		for step = 1, steps do
+			local currentTime = minimumTime + ((maximumTime - minimumTime) * step / steps)
+			local currentValue = interceptResidual(
+				relativePosition,
+				targetVelocity,
+				halfRelativeAcceleration,
+				projectileSpeed,
+				currentTime
+			)
+			if currentValue <= 0 and previousValue > 0 then
+				local low, high = previousTime, currentTime
+				for _ = 1, 28 do
+					local middle = (low + high) * 0.5
+					if interceptResidual(relativePosition, targetVelocity, halfRelativeAcceleration, projectileSpeed, middle) > 0 then
+						low = middle
+					else
+						high = middle
+					end
+				end
+				acceptRoot(high)
+				break
+			end
+			previousTime, previousValue = currentTime, currentValue
+		end
+	end
+	if not bestTime then return nil end
+
+	local displacement = relativePosition
+		+ targetVelocity * bestTime
+		+ halfRelativeAcceleration * (bestTime * bestTime)
+	if displacement.Magnitude <= eps then return nil end
+	local initialVelocity = displacement / bestTime
+	return {
+		AimPosition = origin + initialVelocity,
+		FlightTime = bestTime,
+		ImpactPosition = targetPosition
+			+ targetVelocity * bestTime
+			+ targetAcceleration * (0.5 * bestTime * bestTime),
+		InitialVelocity = initialVelocity
+	}
+end
+
 function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params)
 	local disp = targetPos - origin
 	local p, q, r = targetVelocity.X, targetVelocity.Y, targetVelocity.Z

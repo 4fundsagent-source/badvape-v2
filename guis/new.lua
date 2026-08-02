@@ -34,6 +34,7 @@ local textService = cloneref(game:GetService('TextService'))
 local guiService = cloneref(game:GetService('GuiService'))
 local runService = cloneref(game:GetService('RunService'))
 local httpService = cloneref(game:GetService('HttpService'))
+local playersService = cloneref(game:GetService('Players'))
 
 local fontsize = Instance.new('GetTextBoundsParams')
 fontsize.Width = math.huge
@@ -5690,7 +5691,23 @@ function mainapi:Load(skipgui, profile)
 		button.BackgroundColor3 = Color3.new()
 		button.BackgroundTransparency = hide and 1 or 0.35
 		button.Text = ''
-		button.Parent = game.GameId == 2619619496 and cloneref(game:GetService('Players')).LocalPlayer.PlayerGui.TopBarAppGui.TopBarApp or gui
+		local playerGui = playersService.LocalPlayer:FindFirstChildOfClass('PlayerGui')
+		local topBarGui = game.GameId == 2619619496 and playerGui and playerGui:FindFirstChild('TopBarAppGui')
+		local topBarApp = topBarGui and topBarGui:FindFirstChild('TopBarApp')
+		button.Parent = topBarApp or gui
+		if game.GameId == 2619619496 and not topBarApp then
+			-- Delta can finish BadVape startup before the lobby replicates its
+			-- TopBarAppGui. Keep the button usable in our GUI and reparent it later;
+			-- a missing optional Roblox UI must never abort the whole runtime.
+			task.spawn(function()
+				local currentPlayerGui = playerGui or playersService.LocalPlayer:WaitForChild('PlayerGui', 15)
+				local currentTopBar = currentPlayerGui and currentPlayerGui:WaitForChild('TopBarAppGui', 15)
+				local currentTopBarApp = currentTopBar and currentTopBar:WaitForChild('TopBarApp', 15)
+				if currentTopBarApp and button.Parent then
+					button.Parent = currentTopBarApp
+				end
+			end)
+		end
 		local image = Instance.new('ImageLabel')
 		image.AnchorPoint = Vector2.new(0.5, 0.5)
 		image.Size = UDim2.fromOffset(22, 22)

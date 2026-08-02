@@ -1931,6 +1931,7 @@ run(function()
     local RightClick
     local ShowTarget
     local moveConst = Vector2.new(1, 0.77) * math.rad(0.5)
+    local userGameSettings
 
     local function wrapAngle(num)
     	num = num % math.pi
@@ -1942,13 +1943,33 @@ run(function()
     AimAssist = vape.Categories.Combat:CreateModule({
     	Name = 'Aim Assist',
     	Function = function(callback)
-    		if CircleObject then
-    			CircleObject.Visible = callback
-    		end
-    		if callback then
-    			local ent
-    			local rightClicked = not RightClick.Enabled or inputService:IsMouseButtonPressed(1)
-    			AimAssist:Clean(runService.RenderStepped:Connect(function(dt)
+        if CircleObject then
+            CircleObject.Visible = callback
+        end
+        if callback then
+            if type(mousemoverel) ~= 'function' then
+                if CircleObject then
+                    CircleObject.Visible = false
+                end
+                vape:CreateNotification('Aim Assist', 'Mouse movement API unavailable for this executor.', 5, 'alert')
+                return
+            end
+
+            local settingsSuccess, settings = pcall(function()
+                return UserSettings():GetService('UserGameSettings')
+            end)
+            userGameSettings = settingsSuccess and settings or nil
+            if not userGameSettings then
+                if CircleObject then
+                    CircleObject.Visible = false
+                end
+                vape:CreateNotification('Aim Assist', 'UserGameSettings is unavailable.', 5, 'alert')
+                return
+            end
+
+            local ent
+            local rightClicked = not RightClick.Enabled or inputService:IsMouseButtonPressed(1)
+            AimAssist:Clean(runService.RenderStepped:Connect(function(dt)
     				if CircleObject then
     					CircleObject.Position = inputService:GetMouseLocation()
     				end
@@ -1973,10 +1994,11 @@ run(function()
     						end
 
     						if new ~= Vector3.zero then
-    							local diffYaw = wrapAngle(math.atan2(facing.X, facing.Z) - math.atan2(new.X, new.Z))
-    							local diffPitch = math.asin(facing.Y) - math.asin(new.Y)
-    							local angle = Vector2.new(diffYaw, diffPitch)
-    								// (moveConst * UserSettings():GetService('UserGameSettings').MouseSensitivity)
+							local diffYaw = wrapAngle(math.atan2(facing.X, facing.Z) - math.atan2(new.X, new.Z))
+							local diffPitch = math.asin(facing.Y) - math.asin(new.Y)
+							local sensitivity = math.max(tonumber(userGameSettings.MouseSensitivity) or 1, 0.001)
+							local divisor = moveConst * sensitivity
+							local angle = Vector2.new(diffYaw / divisor.X, diffPitch / divisor.Y)
 
     							angle *= math.min(Speed.Value * dt, 1)
     							mousemoverel(angle.X, angle.Y)
@@ -1999,6 +2021,8 @@ run(function()
     					end
     				end))
     			end
+		else
+			userGameSettings = nil
     		end
     	end,
     	Tooltip = 'Smoothly aims to closest valid target',

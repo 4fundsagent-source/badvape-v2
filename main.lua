@@ -78,6 +78,7 @@ local function runSource(source, chunkName, ...)
 		recordDiagnostic('source_compile_failed', {chunk = chunkName, error = compileError or 'rejected'})
 		return false, detail
 	end
+	recordDiagnostic('source_compile_complete', {chunk = chunkName})
 	local arguments = table.pack(...)
 	local function traceError(value)
 		if type(debug) == 'table' and type(debug.traceback) == 'function' then
@@ -86,6 +87,7 @@ local function runSource(source, chunkName, ...)
 		end
 		return tostring(value)
 	end
+	recordDiagnostic('source_execution_start', {chunk = chunkName})
 	local result = table.pack(xpcall(function()
 		return chunk(table.unpack(arguments, 1, arguments.n))
 	end, traceError))
@@ -105,6 +107,27 @@ local function runSource(source, chunkName, ...)
 		resultType = typeof(result[2]),
 	})
 	return true, result[2]
+end
+
+local function runSourceWithTimeout(source, chunkName, timeout, ...)
+	local arguments = table.pack(...)
+	local finished, result = false, nil
+	local thread = task.spawn(function()
+		result = table.pack(runSource(source, chunkName, table.unpack(arguments, 1, arguments.n)))
+		finished = true
+	end)
+	local deadline = os.clock() + timeout
+	while not finished and os.clock() < deadline do
+		task.wait()
+	end
+	if not finished then
+		if type(task.cancel) == 'function' then
+			pcall(task.cancel, thread)
+		end
+		recordDiagnostic('source_execution_timeout', {chunk = chunkName, timeout = timeout})
+		return false, tostring(chunkName)..' execution timed out', true
+	end
+	return result[1], result[2], false
 end
 local function addTeleportQueueCandidate(list, seen, candidate)
 	if type(candidate) == 'function' and not seen[candidate] then
@@ -393,6 +416,295 @@ local function finishLoading()
 	end
 end
 
+-- Show a one-time choice for changed game profiles after the runtime is fully
+-- loaded.  The installer stages release profiles separately, so this menu can
+-- preserve the active profile and GUI/theme data when the user chooses Install.
+local function showProfileUpdateMenu()
+	local updateApi = shared.BadVapeProfileUpdate
+	if type(updateApi) ~= 'table' or type(updateApi.Get) ~= 'function' then
+		return
+	end
+	local state = updateApi.Get()
+	if type(state) ~= 'table' or state.status ~= 'pending' or type(state.profiles) ~= 'table' or #state.profiles == 0 then
+		return
+	end
+	if tonumber(state.placeId) ~= tonumber(vape and vape.Place) then
+		return
+	end
+	if not vape or not vape.gui or not vape.Loaded then
+		return
+	end
+
+	local staged = {}
+	local function profileBase(item)
+		if type(item) ~= 'table' or type(item.path) ~= 'string' then return nil end
+		local base = item.path:match('^profiles/([%a_]+)%d+%.txt$')
+		return (base == 'default' or base == 'blatant') and base or nil
+	end
+	for _, item in ipairs(state.profiles) do
+		if not profileBase(item) then
+			if type(updateApi.Mark) == 'function' then pcall(updateApi.Mark, 'skipped') end
+			return
+		end
+		local contents = type(updateApi.ReadStaged) == 'function' and updateApi.ReadStaged(item) or nil
+		if type(contents) ~= 'string' or contents == '' then
+			if type(updateApi.Mark) == 'function' then pcall(updateApi.Mark, 'skipped') end
+			return
+		end
+		table.insert(staged, {item = item, contents = contents})
+	end
+
+	local function accentColor()
+		local guiColor = vape.GUIColor
+		if type(guiColor) == 'table'
+			and type(guiColor.Hue) == 'number'
+			and type(guiColor.Sat) == 'number'
+			and type(guiColor.Value) == 'number' then
+			return Color3.fromHSV(guiColor.Hue, guiColor.Sat, guiColor.Value)
+		end
+		return Color3.fromRGB(85, 170, 255)
+	end
+
+	local modal = Instance.new('Frame')
+	modal.Name = 'ProfileUpdateMenu'
+	modal.Size = UDim2.fromScale(1, 1)
+	modal.BackgroundColor3 = Color3.new(0, 0, 0)
+	modal.BackgroundTransparency = 0.38
+	modal.BorderSizePixel = 0
+	modal.ZIndex = 100
+	modal.Parent = vape.gui
+	if type(vape.Clean) == 'function' then
+		vape:Clean(function()
+			if modal and modal.Parent then
+				modal:Destroy()
+			end
+		end)
+	end
+
+	local blocker = Instance.new('TextButton')
+	blocker.Name = 'InputBlocker'
+	blocker.Size = UDim2.fromScale(1, 1)
+	blocker.BackgroundTransparency = 1
+	blocker.BorderSizePixel = 0
+	blocker.Text = ''
+	blocker.Modal = true
+	blocker.ZIndex = 100
+	blocker.Parent = modal
+
+	local panel = Instance.new('Frame')
+	panel.Name = 'Panel'
+	panel.AnchorPoint = Vector2.new(0.5, 0.5)
+	panel.Position = UDim2.fromScale(0.5, 0.5)
+	panel.Size = UDim2.fromOffset(470, 238)
+	panel.BackgroundColor3 = Color3.fromRGB(28, 28, 31)
+	panel.BorderSizePixel = 0
+	panel.ZIndex = 101
+	panel.Parent = modal
+
+	local panelCorner = Instance.new('UICorner')
+	panelCorner.CornerRadius = UDim.new(0, 6)
+	panelCorner.Parent = panel
+	local panelStroke = Instance.new('UIStroke')
+	panelStroke.Color = Color3.fromRGB(75, 75, 82)
+	panelStroke.Transparency = 0.2
+	panelStroke.Parent = panel
+
+	local title = Instance.new('TextLabel')
+	title.Name = 'Title'
+	title.Position = UDim2.fromOffset(22, 17)
+	title.Size = UDim2.new(1, -44, 0, 27)
+	title.BackgroundTransparency = 1
+	title.Text = 'BadVape profile update'
+	title.TextColor3 = Color3.fromRGB(235, 235, 240)
+	title.TextSize = 20
+	title.Font = Enum.Font.GothamSemibold
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.ZIndex = 102
+	title.Parent = panel
+
+	local description = Instance.new('TextLabel')
+	description.Name = 'Description'
+	description.Position = UDim2.fromOffset(22, 52)
+	description.Size = UDim2.new(1, -44, 0, 57)
+	description.BackgroundTransparency = 1
+	description.Text = 'Updated default profiles are available. Override the built-in default, install updates as new profiles, or keep everything unchanged.'
+	description.TextColor3 = Color3.fromRGB(180, 180, 188)
+	description.TextSize = 14
+	description.Font = Enum.Font.Gotham
+	description.TextWrapped = true
+	description.TextXAlignment = Enum.TextXAlignment.Left
+	description.TextYAlignment = Enum.TextYAlignment.Top
+	description.ZIndex = 102
+	description.Parent = panel
+
+	local updateNames = {}
+	for _, entry in ipairs(staged) do
+		local name = profileBase(entry.item) or 'profile'
+		table.insert(updateNames, name)
+	end
+	local summary = Instance.new('TextLabel')
+	summary.Name = 'Profiles'
+	summary.Position = UDim2.fromOffset(22, 112)
+	summary.Size = UDim2.new(1, -44, 0, 20)
+	summary.BackgroundTransparency = 1
+	summary.Text = 'Updated: '..table.concat(updateNames, ', ')
+	summary.TextColor3 = Color3.fromRGB(145, 145, 153)
+	summary.TextSize = 13
+	summary.Font = Enum.Font.Gotham
+	summary.TextXAlignment = Enum.TextXAlignment.Left
+	summary.ZIndex = 102
+	summary.Parent = panel
+
+	local actions = Instance.new('Frame')
+	actions.Name = 'Actions'
+	actions.Position = UDim2.fromOffset(22, 160)
+	actions.Size = UDim2.new(1, -44, 0, 48)
+	actions.BackgroundTransparency = 1
+	actions.ZIndex = 102
+	actions.Parent = panel
+	local layout = Instance.new('UIListLayout')
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Padding = UDim.new(0, 8)
+	layout.Parent = actions
+
+	local closed = false
+	local function closeMenu()
+		if closed then return end
+		closed = true
+		if modal then modal:Destroy() end
+	end
+
+	local function makeButton(name, text, width, color)
+		local button = Instance.new('TextButton')
+		button.Name = name
+		button.Size = UDim2.fromOffset(width, 38)
+		button.BackgroundColor3 = color
+		button.AutoButtonColor = true
+		button.BorderSizePixel = 0
+		button.Text = text
+		button.TextColor3 = Color3.fromRGB(240, 240, 245)
+		button.TextSize = 13
+		button.Font = Enum.Font.GothamSemibold
+		button.ZIndex = 103
+		button.Parent = actions
+		local corner = Instance.new('UICorner')
+		corner.CornerRadius = UDim.new(0, 4)
+		corner.Parent = button
+		return button
+	end
+
+	local nothingButton = makeButton('Nothing', 'Nothing', 82, Color3.fromRGB(60, 60, 67))
+	local installButton = makeButton('Install', 'Install', 88, Color3.fromRGB(70, 105, 135))
+	local overrideButton = makeButton('Override & Install', 'Override & Install', 142, accentColor())
+
+	local function destinationFor(name, item)
+		local place = type(item) == 'table' and tostring(item.path):match('^profiles/[%a_]+(%d+)%.txt$')
+			or tostring(vape.Place)
+		return runtimeFolder..'/profiles/'..name..tostring(place)..'.txt'
+	end
+	local function uniqueName(base, item)
+		local candidate = base..' (updated)'
+		local suffix = 2
+		local function exists(name)
+			for _, profile in ipairs(vape.Profiles or {}) do
+				if type(profile) == 'table' and profile.Name == name then return true end
+			end
+			return isfile(destinationFor(name, item))
+		end
+		while exists(candidate) do
+			candidate = base..' (updated '..tostring(suffix)..')'
+			suffix += 1
+		end
+		return candidate
+	end
+
+	local function overrideProfiles()
+		local activeProfile = vape.Profile
+		local reloadActive = false
+		local added = {}
+		vape.Profiles = vape.Profiles or {}
+		for _, entry in ipairs(staged) do
+			local base = profileBase(entry.item)
+			if type(base) ~= 'string' then return false end
+			-- Override the built-in default profile. Keep a user's custom blatant
+			-- profile intact while still making its updated release available.
+			local targetName = base == 'default' and base or uniqueName(base, entry.item)
+			local ok = pcall(function()
+				local path = base == 'default' and runtimeFolder..'/'..entry.item.path
+					or destinationFor(targetName, entry.item)
+				local parent = path:match('^(.+)/[^/]+$')
+				if parent and not isfolder(parent) then makefolder(parent) end
+				writefile(path, entry.contents)
+			end)
+			if not ok then return false end
+			if base == 'default' and activeProfile == base then reloadActive = true end
+			if base ~= 'default' then
+				table.insert(added, {Name = targetName, Bind = {}})
+			end
+		end
+		for _, profile in ipairs(added) do table.insert(vape.Profiles, profile) end
+		if #added > 0 and vape.Categories and vape.Categories.Profiles
+			and type(vape.Categories.Profiles.ChangeValue) == 'function' then
+			pcall(vape.Categories.Profiles.ChangeValue, vape.Categories.Profiles)
+		end
+		if #added > 0 and type(vape.Save) == 'function' then pcall(vape.Save, vape) end
+		if reloadActive and type(vape.Load) == 'function' then
+			pcall(vape.Load, vape, true, activeProfile)
+		end
+		return true
+	end
+
+	local function installProfiles()
+		local added = {}
+		vape.Profiles = vape.Profiles or {}
+		for _, entry in ipairs(staged) do
+			local base = profileBase(entry.item)
+			if type(base) ~= 'string' then return false end
+			local name = uniqueName(base, entry.item)
+			local ok = pcall(function()
+				writefile(destinationFor(name, entry.item), entry.contents)
+			end)
+			if not ok then return false end
+			table.insert(added, {Name = name, Bind = {}})
+		end
+		for _, profile in ipairs(added) do table.insert(vape.Profiles, profile) end
+		if vape.Categories and vape.Categories.Profiles
+			and type(vape.Categories.Profiles.ChangeValue) == 'function' then
+			pcall(vape.Categories.Profiles.ChangeValue, vape.Categories.Profiles)
+		end
+		-- Save only after the list has been updated; this preserves the existing
+		-- GUI color/theme and active profile while persisting the new entries.
+		if type(vape.Save) == 'function' then pcall(vape.Save, vape) end
+		return true
+	end
+
+	nothingButton.MouseButton1Click:Connect(function()
+		if type(updateApi.Mark) == 'function' then pcall(updateApi.Mark, 'skipped') end
+		vape:CreateNotification('BadVape', 'Profile update skipped.', 5, 'info')
+		closeMenu()
+	end)
+	installButton.MouseButton1Click:Connect(function()
+		if installProfiles() then
+			if type(updateApi.Mark) == 'function' then pcall(updateApi.Mark, 'installed') end
+			vape:CreateNotification('BadVape', 'Updated profiles were added to the Profiles tab.', 6, 'info')
+			closeMenu()
+		else
+			vape:CreateNotification('BadVape', 'Could not install the updated profiles.', 8, 'alert')
+		end
+	end)
+	overrideButton.MouseButton1Click:Connect(function()
+		if overrideProfiles() then
+			if type(updateApi.Mark) == 'function' then pcall(updateApi.Mark, 'applied') end
+			vape:CreateNotification('BadVape', 'Updated profiles installed.', 6, 'info')
+			closeMenu()
+		else
+			vape:CreateNotification('BadVape', 'Could not apply the updated profiles.', 8, 'alert')
+		end
+	end)
+end
+
 if not isfile('badvape/profiles/gui.txt') then
 	writefile('badvape/profiles/gui.txt', 'new')
 end
@@ -551,7 +863,65 @@ local function installLuaProtRequestCompatibility()
 	end
 	if #adapters == 0 then return false, function() end end
 
-	local selected = adapters[1]
+	local function normalizeResponse(response)
+		if type(response) ~= 'table' then return response end
+		local normalized = {}
+		for key, value in response do
+			normalized[key] = value
+		end
+		normalized.StatusCode = tonumber(
+			response.StatusCode or response.Status or response.status_code or response.status
+		)
+		normalized.Body = response.Body or response.body
+		return normalized
+	end
+
+	local function callAdapter(adapter, options)
+		local normalizedOptions = {}
+		for key, value in options do
+			normalizedOptions[key] = value
+		end
+		normalizedOptions.Url = normalizedOptions.Url or normalizedOptions.URL or normalizedOptions.url
+		normalizedOptions.Method = normalizedOptions.Method or normalizedOptions.method or 'GET'
+		return normalizeResponse(adapter(normalizedOptions))
+	end
+
+	-- The official loader always prefers `http.request` when it exists. Some
+	-- executors expose a stub there while their direct `request` works. Probe all
+	-- candidates concurrently and install the first response that is known-good.
+	local selected, selectedIndex
+	local completed = 0
+	for index, adapter in ipairs(adapters) do
+		task.spawn(function()
+			local ok, response = pcall(callAdapter, adapter, {
+				Url = 'https://eu-1.luaprot.net/api/v1/nodes/get',
+				Method = 'GET',
+			})
+			if not selected and ok and type(response) == 'table'
+				and response.StatusCode == 200 and type(response.Body) == 'string'
+				and response.Body ~= '' then
+				selected = adapter
+				selectedIndex = index
+			end
+			completed += 1
+		end)
+	end
+	local probeDeadline = os.clock() + 8
+	while not selected and completed < #adapters and os.clock() < probeDeadline do
+		task.wait()
+	end
+	if not selected then
+		recordDiagnostic('luaprot_request_probe_failed', {adapters = #adapters})
+		return false, function() end
+	end
+	recordDiagnostic('luaprot_request_adapter_selected', {
+		adapter = selectedIndex,
+		adapters = #adapters,
+	})
+
+	local compatibleRequest = function(options)
+		return callAdapter(selected, options)
+	end
 	local changes, touched = {}, {}
 	local function install(target, field)
 		if type(target) ~= 'table' then return end
@@ -559,9 +929,8 @@ local function installLuaProtRequestCompatibility()
 		if touched[target][field] then return end
 		touched[target][field] = true
 		local previous = rawEnvironmentValue(target, field)
-		if type(previous) == 'function' then return end
-		local ok = pcall(rawset, target, field, selected)
-		if ok and rawEnvironmentValue(target, field) == selected then
+		local ok = pcall(rawset, target, field, compatibleRequest)
+		if ok and rawEnvironmentValue(target, field) == compatibleRequest then
 			table.insert(changes, {target = target, field = field, previous = previous})
 		end
 	end
@@ -577,13 +946,13 @@ local function installLuaProtRequestCompatibility()
 			and rawEnvironmentValue(httpLibrary, 'request') or nil
 		local directRequest = rawEnvironmentValue(environment, 'request')
 		local selectedByLoader = httpLibrary and httpRequest or directRequest
-		usable = usable or type(selectedByLoader) == 'function'
+		usable = usable or selectedByLoader == compatibleRequest
 	end
 
 	local function restore()
 		for index = #changes, 1, -1 do
 			local change = changes[index]
-			if rawEnvironmentValue(change.target, change.field) == selected then
+			if rawEnvironmentValue(change.target, change.field) == compatibleRequest then
 				pcall(rawset, change.target, change.field, change.previous)
 			end
 		end
@@ -714,7 +1083,20 @@ local function loadGameModule(placeId)
 	-- protected bytes work without leaking or replacing another runtime's value.
 	local previousLegacyVape = shared.vape
 	shared.vape = vape
-	local results = table.pack(runSource(gameSource, tostring(placeId), license))
+	local results
+	if luaProtRoute then
+		local ok, loaded, timedOut = runSourceWithTimeout(gameSource, tostring(placeId), 40, license)
+		if timedOut then
+			shared.BadVapeProtectedFailure = {
+				detail = 'LuaProt loader execution timed out',
+				reason = 'provider_runtime_timeout',
+				stage = 'provider_loader',
+			}
+		end
+		results = table.pack(ok, loaded)
+	else
+		results = table.pack(runSource(gameSource, tostring(placeId), license))
+	end
 	if luaProtLoadSignal and results[1] and results[2] ~= false then
 		local waitStarted = os.clock()
 		local waitDeadline = waitStarted + 30
@@ -819,8 +1201,13 @@ if not shared.BadVapeIndependent then
 	loadBadVapeTheme()
 	recordDiagnostic('main_finish_loading', {placeId = game.PlaceId})
 	finishLoading()
+	task.defer(showProfileUpdateMenu)
 else
 	loadBadVapeTheme()
-	vape.Init = finishLoading
+	vape.Init = function(...)
+		local result = table.pack(finishLoading(...))
+		task.defer(showProfileUpdateMenu)
+		return table.unpack(result, 1, result.n)
+	end
 	return vape
 end

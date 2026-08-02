@@ -56,6 +56,16 @@ local function sortDistance(a, b)
 	return a.Magnitude < b.Magnitude
 end
 
+local function getLiveEntityPart(ent, partName)
+	local part = ent and ent[partName]
+	return part and part.Parent and part or nil
+end
+
+local function entityIsVulnerable(ent)
+	local success, vulnerable = pcall(entitylib.isVulnerable, ent)
+	return success and vulnerable
+end
+
 local function loopClean(tbl)
 	for i, v in tbl do
 		if type(v) == 'table' then
@@ -134,11 +144,13 @@ entitylib.EntityMouse = function(entitysettings)
 			if not entitysettings.Players and v.Player then continue end
 			if not entitysettings.NPCs and v.NPC then continue end
 			if not v.Targetable then continue end
-			local position, vis = gameCamera.WorldToViewportPoint(gameCamera, v[entitysettings.Part].Position)
+			local part = getLiveEntityPart(v, entitysettings.Part)
+			if not part then continue end
+			local position, vis = gameCamera.WorldToViewportPoint(gameCamera, part.Position)
 			if not vis then continue end
 			local mag = (mouseLocation - Vector2.new(position.x, position.y)).Magnitude
 			if mag > entitysettings.Range then continue end
-			if entitylib.isVulnerable(v) then
+			if entityIsVulnerable(v) then
 				table.insert(sortingTable, {
 					Entity = v,
 					Magnitude = v.Target and -1 or mag
@@ -151,8 +163,11 @@ entitylib.EntityMouse = function(entitysettings)
 		end
 
 		for _, v in sortingTable do
+			local part = getLiveEntityPart(v.Entity, entitysettings.Part)
+			if not part or not v.Entity.Targetable or not entityIsVulnerable(v.Entity) then continue end
 			if entitysettings.Wallcheck then
-				if entitylib.Wallcheck(entitysettings.Origin, v.Entity[entitysettings.Part].Position, entitysettings.Wallcheck) then continue end
+				if not entitysettings.Origin
+					or entitylib.Wallcheck(entitysettings.Origin, part.Position, entitysettings.Wallcheck) then continue end
 			end
 			table.clear(entitysettings)
 			table.clear(sortingTable)
@@ -165,17 +180,24 @@ end
 
 entitylib.EntityPosition = function(entitysettings)
 	if entitylib.isAlive then
-		local localPosition, sortingTable = entitysettings.Origin or entitylib.character.HumanoidRootPart.Position, {}
+		local localRoot = entitylib.character and entitylib.character.HumanoidRootPart
+		local localPosition, sortingTable = entitysettings.Origin or (localRoot and localRoot.Parent and localRoot.Position), {}
+		if not localPosition then
+			table.clear(entitysettings)
+			return
+		end
 		local range, customSort = entitysettings.Range, entitysettings.Sort or entitysettings.Priority
 		local rangeSquared = range * range
 		for _, v in entitylib.List do
 			if not entitysettings.Players and v.Player then continue end
 			if not entitysettings.NPCs and v.NPC then continue end
 			if not v.Targetable then continue end
-			local delta = v[entitysettings.Part].Position - localPosition
+			local part = getLiveEntityPart(v, entitysettings.Part)
+			if not part then continue end
+			local delta = part.Position - localPosition
 			local mag = delta:Dot(delta)
 			if mag > rangeSquared then continue end
-			if entitylib.isVulnerable(v) then
+			if entityIsVulnerable(v) then
 				table.insert(sortingTable, {
 					Entity = v,
 					Magnitude = v.Target and -1 or (customSort and math.sqrt(mag) or mag)
@@ -191,8 +213,10 @@ entitylib.EntityPosition = function(entitysettings)
 		end
 
 		for _, v in sortingTable do
+			local part = getLiveEntityPart(v.Entity, entitysettings.Part)
+			if not part or not v.Entity.Targetable or not entityIsVulnerable(v.Entity) then continue end
 			if entitysettings.Wallcheck then
-				if entitylib.Wallcheck(localPosition, v.Entity[entitysettings.Part].Position, entitysettings.Wallcheck) then continue end
+				if entitylib.Wallcheck(localPosition, part.Position, entitysettings.Wallcheck) then continue end
 			end
 			table.clear(entitysettings)
 			table.clear(sortingTable)
@@ -206,17 +230,24 @@ end
 entitylib.AllPosition = function(entitysettings)
 	local returned = {}
 	if entitylib.isAlive then
-		local localPosition, sortingTable = entitysettings.Origin or entitylib.character.HumanoidRootPart.Position, {}
+		local localRoot = entitylib.character and entitylib.character.HumanoidRootPart
+		local localPosition, sortingTable = entitysettings.Origin or (localRoot and localRoot.Parent and localRoot.Position), {}
+		if not localPosition then
+			table.clear(entitysettings)
+			return returned
+		end
 		local range, customSort = entitysettings.Range, entitysettings.Sort
 		local rangeSquared = range * range
 		for _, v in entitylib.List do
 			if not entitysettings.Players and v.Player then continue end
 			if not entitysettings.NPCs and v.NPC then continue end
 			if not v.Targetable then continue end
-			local delta = v[entitysettings.Part].Position - localPosition
+			local part = getLiveEntityPart(v, entitysettings.Part)
+			if not part then continue end
+			local delta = part.Position - localPosition
 			local mag = delta:Dot(delta)
 			if mag > rangeSquared then continue end
-			if entitylib.isVulnerable(v) then
+			if entityIsVulnerable(v) then
 				table.insert(sortingTable, {Entity = v, Magnitude = v.Target and -1 or (customSort and math.sqrt(mag) or mag)})
 			end
 		end
@@ -226,8 +257,10 @@ entitylib.AllPosition = function(entitysettings)
 		end
 
 		for _, v in sortingTable do
+			local part = getLiveEntityPart(v.Entity, entitysettings.Part)
+			if not part or not v.Entity.Targetable or not entityIsVulnerable(v.Entity) then continue end
 			if entitysettings.Wallcheck then
-				if entitylib.Wallcheck(localPosition, v.Entity[entitysettings.Part].Position, entitysettings.Wallcheck) then continue end
+				if entitylib.Wallcheck(localPosition, part.Position, entitysettings.Wallcheck) then continue end
 			end
 			table.insert(returned, v.Entity)
 			if #returned >= (entitysettings.Limit or math.huge) then break end

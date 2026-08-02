@@ -106,6 +106,8 @@ local revisionPath = folder..'/cache/public-revision.txt'
 local fileIndexPath = folder..'/cache/public-file-index.txt'
 local profileSeedPath = folder..'/cache/profile-seed-v1.txt'
 local profileOverridePath = folder..'/cache/profile-reset-20260715-v1.txt'
+local profileUpdateStatePath = folder..'/cache/profile-update-v1.json'
+local profileUpdateRoot = folder..'/cache/profile-updates'
 local releaseRefPath = folder..'/cache/public-release-ref.txt'
 local runtimeRepairPath = folder..'/cache/runtime-repair-20260716-v1.txt'
 
@@ -846,6 +848,96 @@ local function encodeFileIndex(index)
 	return #lines > 0 and table.concat(lines, '\n')..'\n' or ''
 end
 
+-- Profile files are user data once the initial seed has been installed.  Keep
+-- release changes in a separate, verified staging area so the runtime can ask
+-- the user whether to apply them without touching GUI/theme settings.
+local profileUpdateState
+local function profileUpdatePathIsSafe(path)
+	if type(path) ~= 'string' then return false end
+	local name, place = path:match('^cache/profile%-updates/[0-9a-zA-Z%-]+/profiles/([%a_]+)(%d+)%.txt$')
+	return (name == 'default' or name == 'blatant') and place ~= nil
+end
+
+local function readProfileUpdateState()
+	if not safeIsFile(profileUpdateStatePath) then
+		return nil
+	end
+	local ok, contents = pcall(readfile, profileUpdateStatePath)
+	if not ok or type(contents) ~= 'string' or contents == '' then
+		return nil
+	end
+	local decodedOk, decoded = pcall(httpService.JSONDecode, httpService, contents)
+	if not decodedOk or type(decoded) ~= 'table'
+		or decoded.schemaVersion ~= 1
+		or type(decoded.revision) ~= 'string'
+		or type(decoded.status) ~= 'string'
+		or tonumber(decoded.placeId) == nil
+		or (decoded.status ~= 'pending' and decoded.status ~= 'installed'
+			and decoded.status ~= 'applied' and decoded.status ~= 'skipped')
+		or type(decoded.profiles) ~= 'table' then
+		return nil
+	end
+	local validProfiles = {}
+	for _, item in decoded.profiles do
+		local itemName, itemPlace
+		if type(item) == 'table' and type(item.path) == 'string' then
+			itemName, itemPlace = item.path:match('^profiles/([%a_]+)(%d+)%.txt$')
+		end
+		if type(item) == 'table'
+			and (itemName == 'default' or itemName == 'blatant')
+			and itemPlace ~= nil
+			and type(item.stagedPath) == 'string'
+			and profileUpdatePathIsSafe(item.stagedPath)
+			and type(item.bytes) == 'number'
+			and type(item.sha256) == 'string'
+			and #item.sha256 == 64
+			and item.sha256:match('^[0-9a-f]+$') then
+			table.insert(validProfiles, item)
+		end
+	end
+	if #validProfiles == 0 then
+		return nil
+	end
+	decoded.profiles = validProfiles
+	return decoded
+end
+
+local function writeProfileUpdateState(state)
+	if type(state) ~= 'table' then
+		return false
+	end
+	local ok, encoded = pcall(httpService.JSONEncode, httpService, state)
+	if not ok or type(encoded) ~= 'string' then
+		return false
+	end
+	local writeOk = pcall(writefile, profileUpdateStatePath, encoded)
+	return writeOk
+end
+
+profileUpdateState = readProfileUpdateState()
+local profileUpdateApi = {}
+function profileUpdateApi.Get()
+	return profileUpdateState
+end
+function profileUpdateApi.Mark(status)
+	if type(profileUpdateState) ~= 'table'
+		or (status ~= 'pending' and status ~= 'installed'
+			and status ~= 'applied' and status ~= 'skipped') then
+		return false
+	end
+	profileUpdateState.status = status
+	profileUpdateState.updatedAt = os.time and os.time() or nil
+	return writeProfileUpdateState(profileUpdateState)
+end
+function profileUpdateApi.ReadStaged(item)
+	if type(item) ~= 'table' or not profileUpdatePathIsSafe(item.stagedPath) then
+		return nil
+	end
+	local ok, contents = pcall(readfile, folder..'/'..item.stagedPath)
+	return ok and type(contents) == 'string' and contents or nil
+end
+shared.BadVapeProfileUpdate = profileUpdateApi
+
 local function neutralizeRetiredRuntimePath(path)
 	if not retiredRuntimePaths[path] then
 		return false
@@ -894,6 +986,18 @@ if manifest then
 	local nextIndex = copyFileIndex(previousIndex)
 	local manifestPaths = {}
 	local pending = {}
+	local manifestEntries = {}
+	local profilePlaceAliases = {
+		[8444591321] = 6872274481,
+		[8560631822] = 6872274481,
+		[117398147513099] = 17625359962,
+		[133215910299950] = 17625359962,
+		[71874690745115] = 17625359962,
+		[129604661913557] = 17625359962,
+	}
+	local currentProfilePlace = profilePlaceAliases[tonumber(game.PlaceId)] or tonumber(game.PlaceId)
+	local profileUpdateForRevision = false
+	local profileUpdateCompleted = false
 	local requiredCount = 0
 	for _ in requiredPaths do requiredCount += 1 end
 	diagnostics.record('manifest_accepted', {
@@ -907,29 +1011,105 @@ if manifest then
 	})
 	for _, entry in ipairs(manifest.files) do
 		manifestPaths[entry.path] = true
+		manifestEntries[entry.path] = entry
+	end
+	if profileUpdateState
+		and profileUpdateState.revision == manifest.revision
+		and tonumber(profileUpdateState.placeId) == currentProfilePlace then
+		profileUpdateCompleted = profileUpdateState.status == 'installed'
+			or profileUpdateState.status == 'applied'
+			or profileUpdateState.status == 'skipped'
+		if profileUpdateState.status == 'pending' then
+			profileUpdateForRevision = true
+			for _, item in ipairs(profileUpdateState.profiles) do
+				local entry = manifestEntries[item.path]
+				local stagedOk, staged = pcall(readfile, folder..'/'..item.stagedPath)
+				if not entry
+					or entry.bytes ~= item.bytes
+					or entry.sha256 ~= item.sha256
+					or not stagedOk
+					or not contentMatches(entry, staged) then
+					profileUpdateForRevision = false
+					break
+				end
+			end
+			if not profileUpdateForRevision then
+				profileUpdateState = nil
+			end
+		end
+	end
+	for _, entry in ipairs(manifest.files) do
 		if requiredPaths[entry.path] then
 			local localPath = folder..'/'..entry.path
 			local seedProfile = seedProfilePaths[entry.path] == true
 			local releaseProfile = releaseProfileOverridePaths[entry.path] == true
 			local runtimeFile = entry.path:sub(1, 9) ~= 'profiles/'
+			local profileFile = not runtimeFile
+			local profileKind, profilePlace = entry.path:match('^profiles/([%a_]+)(%d+)%.txt$')
+			if profileKind ~= 'default' and profileKind ~= 'blatant' then
+				profileKind = nil
+			end
+			profilePlace = tonumber(profilePlace)
 			local reasons = {}
-			if not safeIsFile(localPath) then table.insert(reasons, 'missing') end
+			local localExists = safeIsFile(localPath)
+			if not localExists then table.insert(reasons, 'missing') end
 			if seedProfile and not profileSeeded then table.insert(reasons, 'profile-seed') end
 			if releaseProfile and forceProfileOverride then table.insert(reasons, 'profile-override') end
 			if runtimeFile and forceRuntimeRepair then table.insert(reasons, 'runtime-repair') end
 			local needsDownload = #reasons > 0
-			if not needsDownload and not seedProfile then
+			local localMatchesRelease = false
+			if profileFile and localExists then
+				local readOk, cached = pcall(readfile, localPath)
+				localMatchesRelease = readOk and contentMatches(entry, cached)
+			end
+			local shouldStageProfile = profileFile
+				and profileKind ~= nil
+				and profilePlace == currentProfilePlace
+				and localExists
+				and profileSeeded
+				and not forceProfileOverride
+				and not localMatchesRelease
+				and not profileUpdateForRevision
+				and not profileUpdateCompleted
+			local previous = previousIndex[entry.path]
+			local releaseChanged = hasPreviousIndex
+				and previous ~= nil
+				and (previous.bytes ~= entry.bytes or previous.sha256 ~= entry.sha256)
+			if shouldStageProfile and not releaseChanged then
+				shouldStageProfile = false
+			end
+			if not profileFile and not needsDownload then
 				local ok, cached = pcall(readfile, localPath)
 				needsDownload = not ok or not contentMatches(entry, cached)
 				if needsDownload then table.insert(reasons, ok and 'content-mismatch' or 'read-failed') end
 			end
-			if not needsDownload and not seedProfile then
-				local previous = previousIndex[entry.path]
+			if not profileFile and not needsDownload then
 				needsDownload = not hasPreviousIndex
 					or not previous
 					or previous.bytes ~= entry.bytes
 					or previous.sha256 ~= entry.sha256
 				if needsDownload then table.insert(reasons, 'index-mismatch') end
+			end
+			if shouldStageProfile then
+				local stagedRelativePath = 'cache/profile-updates/'..manifest.revision..'/'..entry.path
+				table.insert(pending, {
+					entry = entry,
+					localPath = folder..'/'..stagedRelativePath,
+					reason = 'profile-update',
+					profileUpdate = true,
+					stagedRelativePath = stagedRelativePath,
+				})
+				nextIndex[entry.path] = {bytes = entry.bytes, sha256 = entry.sha256}
+				diagnostics.fileState(entry.path, entry, 'pending:profile-update')
+				continue
+			end
+			-- Existing profile files are user-owned.  A release hash mismatch is
+			-- intentionally kept out of the normal install queue; it is either
+			-- staged above (for the active game's profiles) or preserved here.
+			if profileFile and localExists and not needsDownload then
+				nextIndex[entry.path] = {bytes = entry.bytes, sha256 = entry.sha256}
+				diagnostics.fileState(entry.path, entry, 'user-preserved')
+				continue
 			end
 			if needsDownload then
 				table.insert(pending, {
@@ -1017,6 +1197,7 @@ if manifest then
 		end
 	end
 	-- All network work succeeded before any cached runtime file is replaced.
+	local stagedProfiles = {}
 	for index, pendingFile in ipairs(pending) do
 		local parentOk, parentError = pcall(ensureParent, pendingFile.localPath)
 		if not parentOk then
@@ -1041,6 +1222,16 @@ if manifest then
 			bytes = pendingFile.entry.bytes,
 			sha256 = pendingFile.entry.sha256,
 		}
+		if pendingFile.profileUpdate then
+			local profileName = pendingFile.entry.path:match('^profiles/([%a_]+)')
+			table.insert(stagedProfiles, {
+				name = profileName,
+				path = pendingFile.entry.path,
+				stagedPath = pendingFile.stagedRelativePath,
+				bytes = pendingFile.entry.bytes,
+				sha256 = pendingFile.entry.sha256,
+			})
+		end
 		diagnostics.fileState(pendingFile.entry.path, pendingFile.entry, 'installed')
 	end
 	for _, path in ipairs(retiredPending) do
@@ -1054,23 +1245,50 @@ if manifest then
 			error('failed to neutralize retired runtime file: '..path, 0)
 		end
 	end
-	writefile(fileIndexPath, encodeFileIndex(nextIndex))
-	writefile(revisionPath, manifest.revision)
-	if releaseRef:match('^[0-9a-f]+$') and #releaseRef == 40 then
-		writefile(releaseRefPath, releaseRef)
+	-- Persist the staged profile state before advancing the manifest index. If a
+	-- profile-state write is interrupted, defer the commit markers so the next
+	-- run can safely retry staging instead of believing it was already handled.
+	local profileStateReady = true
+	if #stagedProfiles > 0 then
+		profileUpdateState = {
+			schemaVersion = 1,
+			revision = manifest.revision,
+			placeId = currentProfilePlace,
+			status = 'pending',
+			profiles = stagedProfiles,
+		}
+		if not writeProfileUpdateState(profileUpdateState) then
+			profileStateReady = false
+			diagnostics.record('profile_update_state_write_failed', {revision = manifest.revision})
+		else
+			diagnostics.record('profile_update_staged', {
+				count = #stagedProfiles,
+				revision = manifest.revision,
+			})
+		end
+	end
+	if profileStateReady then
+		writefile(fileIndexPath, encodeFileIndex(nextIndex))
+		writefile(revisionPath, manifest.revision)
+		if releaseRef:match('^[0-9a-f]+$') and #releaseRef == 40 then
+			writefile(releaseRefPath, releaseRef)
+		else
+			-- A branch fallback means an older immutable ref is not a valid repair
+			-- source. Main.lua intentionally treats this marker as the live branch.
+			writefile(releaseRefPath, 'main')
+		end
+		writefile(profileSeedPath, manifest.revision)
+		if forceProfileOverride then
+			writefile(profileOverridePath, manifest.revision)
+		end
+		-- Fallback downloads use this branch; user profile/config files remain untouched.
+		writefile(folder..'/profiles/commit.txt', branch)
+		writefile(runtimeRepairPath, manifest.revision)
 	else
-		-- A branch fallback means an older immutable ref is not a valid repair
-		-- source. Main.lua intentionally treats this marker as the live branch.
-		writefile(releaseRefPath, 'main')
+		diagnostics.record('installer_commit_deferred', {revision = manifest.revision})
 	end
-	writefile(profileSeedPath, manifest.revision)
-	if forceProfileOverride then
-		writefile(profileOverridePath, manifest.revision)
-	end
-	-- Fallback downloads use this branch; user profile/config files remain untouched.
-	writefile(folder..'/profiles/commit.txt', branch)
-	writefile(runtimeRepairPath, manifest.revision)
 	diagnostics.record('installer_committed', {
+		committed = profileStateReady,
 		installed = #pending,
 		releaseRef = releaseRef,
 		revision = manifest.revision,
