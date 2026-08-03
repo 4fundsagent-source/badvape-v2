@@ -408,20 +408,36 @@ if shared.BadVapeDeveloper and getrawmetatable and setreadonly and getnamecallme
 	end)
 end
 
-repeat
+-- Some executors report IsLoaded=false forever when injected after the client
+-- is usable. Prefer a ready PlayerGui and keep both waits bounded.
+local readyDeadline = tick() + 15
+while tick() < readyDeadline do
+	local ready = false
+	pcall(function()
+		ready = game:IsLoaded()
+			or (playersService.LocalPlayer and playersService.LocalPlayer:FindFirstChild('PlayerGui') ~= nil)
+	end)
+	if ready then break end
 	task.wait()
-until game:IsLoaded()
+end
 
 local function waitForLocalPlayer()
-	local localPlayer
-	repeat
+	local deadline = tick() + 30
+	while tick() < deadline do
+		local localPlayer = playersService.LocalPlayer
+		if localPlayer and localPlayer:FindFirstChild('PlayerGui') then
+			return localPlayer
+		end
 		task.wait()
-		localPlayer = playersService.LocalPlayer
-	until localPlayer and localPlayer:FindFirstChild('PlayerGui')
-	return localPlayer
+	end
+	return nil
 end
 
 local localPlayer = waitForLocalPlayer()
+if not localPlayer then
+	restoreRuntimeEnvironment()
+	error('BadVape local player unavailable', 0)
+end
 
 local mainPath = folder..'/main.lua'
 if not safeIsFile(mainPath) then

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-cee0985f5ef35a702698f53dacd62d18d4b6350c91be21119f7d08520e72c5af",
+  "revision": "sha256-b9fc234b6f888d36ca8452405114090efddcbe2cdecca713995387d144dcc690",
   "files": [
     {
       "path": "bootstrap.lua",
@@ -229,13 +229,13 @@
     },
     {
       "path": "main.lua",
-      "bytes": 46852,
-      "sha256": "b45b911d882630ec1bda2764e1006dbeb23412ad557159f3d8cb30d4dd2948cd"
+      "bytes": 47148,
+      "sha256": "79b86c219a44bbd24a7627efbd7898b171d1bb79c20a000850901143bae9a820"
     },
     {
       "path": "os.luau",
-      "bytes": 11580,
-      "sha256": "24e519a5778268b9d447ff8ecf84a8a76ecea6dfe210eec1220c5e06ff2b033a"
+      "bytes": 12133,
+      "sha256": "a20b5692f5a25d21bfe14b9d9b3063ddc4498a32df487b8a372b0da7139110d2"
     },
     {
       "path": "profiles/2619619496.gui.txt",

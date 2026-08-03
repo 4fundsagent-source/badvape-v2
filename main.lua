@@ -47,7 +47,18 @@ recordDiagnostic('main_start', {
 		or (license.Key and (license.Key:match('^BV%-%u%-') and 'license' or 'uid') or 'missing'),
 	placeId = game.PlaceId,
 })
-repeat task.wait() until game:IsLoaded()
+local readyDeadline = tick() + 15
+while tick() < readyDeadline do
+	local ready = false
+	pcall(function()
+		local players = game:GetService('Players')
+		local localPlayer = players.LocalPlayer
+		ready = game:IsLoaded()
+			or (localPlayer and localPlayer:FindFirstChild('PlayerGui') ~= nil)
+	end)
+	if ready then break end
+	task.wait()
+end
 local staleVape = shared.BadVape
 if type(staleVape) == 'table' and type(staleVape.Uninject) == 'function' then
 	pcall(staleVape.Uninject, staleVape)
