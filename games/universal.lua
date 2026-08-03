@@ -8185,52 +8185,52 @@ run(function()
     Parkour = vape.Categories.World:CreateModule({
     	Name = 'Parkour',
     	Function = function(callback)
-    		if callback then
-    			local edgeRay = RaycastParams.new()
-    			edgeRay.RespectCanCollide = true
-    			local nextJump = 0
+		if callback then
+			local edgeRay = RaycastParams.new()
+			edgeRay.RespectCanCollide = true
+			local nextJump = 0
 
-    			Parkour:Clean(runService.RenderStepped:Connect(function()
-    				if not entitylib.isAlive or tick() < nextJump then return end
+			Parkour:Clean(runService.RenderStepped:Connect(function()
+				if not entitylib.isAlive or tick() < nextJump then return end
 
-    				local character = entitylib.character
-    				local humanoid, root = character.Humanoid, character.RootPart
-    				local state = humanoid:GetState()
+				local character = entitylib.character
+				local humanoid, root = character.Humanoid, character.RootPart
+				local state = humanoid:GetState()
 				if state ~= Enum.HumanoidStateType.Running
 					and state ~= Enum.HumanoidStateType.RunningNoPhysics
 					and state ~= Enum.HumanoidStateType.Landed then
-    					return
-    				end
+					return
+				end
 
-    				local moveDirection = humanoid.MoveDirection * Vector3.new(1, 0, 1)
-    				if moveDirection.Magnitude < 0.05 then return end
+				local moveDirection = humanoid.MoveDirection * Vector3.new(1, 0, 1)
+				if moveDirection.Magnitude < 0.05 then return end
 
-    				edgeRay.FilterDescendantsInstances = {lplr.Character, gameCamera}
+				edgeRay.FilterDescendantsInstances = {lplr.Character, gameCamera}
 
-    				local rayHeight = math.max(2, humanoid.HipHeight + 1.5)
-    				local currentGround = workspace:Raycast(
-    					root.Position + Vector3.new(0, 0.5, 0),
-    					Vector3.new(0, -rayHeight, 0),
-    					edgeRay
-    				)
-    				if not isValidGroundRay(currentGround, humanoid) then return end
+				local rayHeight = math.max(2, humanoid.HipHeight + 1.5)
+				local currentGround = workspace:Raycast(
+					root.Position + Vector3.new(0, 0.5, 0),
+					Vector3.new(0, -rayHeight, 0),
+					edgeRay
+				)
+				if not isValidGroundRay(currentGround, humanoid) then return end
 
-    				local horizontalVelocity = root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)
-    				local lookAhead = math.clamp(1.35 + horizontalVelocity.Magnitude * 0.06, 1.35, 2.75)
-    				local aheadOrigin = root.Position + moveDirection.Unit * lookAhead + Vector3.new(0, 0.5, 0)
-    				local aheadGround = workspace:Raycast(
-    					aheadOrigin,
-    					Vector3.new(0, -rayHeight, 0),
-    					edgeRay
-    				)
+				local horizontalVelocity = root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)
+				local lookAhead = math.clamp(1.35 + horizontalVelocity.Magnitude * 0.06, 1.35, 2.75)
+				local aheadOrigin = root.Position + moveDirection.Unit * lookAhead + Vector3.new(0, 0.5, 0)
+				local aheadGround = workspace:Raycast(
+					aheadOrigin,
+					Vector3.new(0, -rayHeight, 0),
+					edgeRay
+				)
 
-    				if not isValidGroundRay(aheadGround, humanoid) then
-    					humanoid.Jump = true
-    					pcall(humanoid.ChangeState, humanoid, Enum.HumanoidStateType.Jumping)
-    					nextJump = tick() + 0.2
-    				end
-    			end))
-    		end
+				if not isValidGroundRay(aheadGround, humanoid) then
+					humanoid.Jump = true
+					pcall(humanoid.ChangeState, humanoid, Enum.HumanoidStateType.Jumping)
+					nextJump = tick() + 0.2
+				end
+			end))
+		end
     	end,
     	Tooltip = 'Automatically jumps after reaching the edge',
     })
