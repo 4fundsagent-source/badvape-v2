@@ -2021,8 +2021,8 @@ run(function()
     					end
     				end))
     			end
-		else
-			userGameSettings = nil
+    		else
+    			userGameSettings = nil
     		end
     	end,
     	Tooltip = 'Smoothly aims to closest valid target',

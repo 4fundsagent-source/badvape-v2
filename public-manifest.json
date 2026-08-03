@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-f27353be2ab162ec0a023f8452eb3fc539bdc3668b50774b0d93e2a183fa9818",
+  "revision": "sha256-b6ef6702a3ae199539fd9685dcd070728416a857b2c37b1e4865e4b04660a080",
   "files": [
     {
       "path": "bootstrap.lua",
@@ -89,8 +89,8 @@
     },
     {
       "path": "games/6872274481.lua",
-      "bytes": 1613704,
-      "sha256": "0247c7746610226b5050e7e44682068c50ac49570cb0488b01de68903c1b8880"
+      "bytes": 1261687,
+      "sha256": "12f5ee59922d40c17dec16efd05cda9177453fe79733baa935fef722a7e649e3"
     },
     {
       "path": "games/71874690745115.lua",
@@ -154,8 +154,8 @@
     },
     {
       "path": "games/universal.lua",
-      "bytes": 294660,
-      "sha256": "25b9275ee7f1f721237719a5d2d2242cbdeed9e797cfe6e931bb6b40706e3b4a"
+      "bytes": 294668,
+      "sha256": "90c82a72a5dd27fd8afc1a51035052e5c4d1f42b147a761ef829f319f3c23475"
     },
     {
       "path": "guis/new.lua",
@@ -274,8 +274,8 @@
     },
     {
       "path": "profiles/default6872274481.txt",
-      "bytes": 52474,
-      "sha256": "17db8763e81c6eb4f3fea8d72752b1d03ea475e330db79a1aba02c0ce4989615"
+      "bytes": 52544,
+      "sha256": "161a971a1cedb0d5e5da7536c7601041a8ab5dd4b4ae3520a2a6d1df59ab0dd2"
     },
     {
       "path": "profiles/features.json",
