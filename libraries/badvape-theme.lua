@@ -39,9 +39,39 @@ return function(vape, entitylib)
 	local currentCloud
 	local characterConnection
 	local cleanFunc
+	local waterTask
+	local waterGeneration = 0
+	local waterRegion
+	local terrainSettings = {}
+	local mapReadySince = 0
+	local rootStableSince = 0
+	local lastRootPosition
 
 	local function getEntityLibrary()
 		return entitylib or vape.Libraries and vape.Libraries.entity
+	end
+
+	local function cancelWaterTask()
+		waterGeneration += 1
+		if waterTask then
+			pcall(task.cancel, waterTask)
+			waterTask = nil
+		end
+	end
+
+	local function clearWaterRegion()
+		local region = waterRegion
+		waterRegion = nil
+		if not region then return end
+		local terrain = workspace:FindFirstChildOfClass('Terrain')
+		if terrain then
+			-- Only clear the thin region created by Theme.  The previous cleanup
+			-- called Terrain:Clear(), which erased the loaded map and left the
+			-- player under/inside the skybox after a respawn.
+			pcall(function()
+				terrain:FillBlock(region.CFrame, region.Size, Enum.Material.Air)
+			end)
+		end
 	end
 
 	local function removeOldLightingObject(object)
@@ -64,6 +94,9 @@ return function(vape, entitylib)
 	end
 
 	local function cleanup()
+		mapReadySince = 0
+		rootStableSince = 0
+		lastRootPosition = nil
 		for _, object in newObjects do
 			if object and object.Parent then
 				object:Destroy()
@@ -98,10 +131,17 @@ return function(vape, entitylib)
 			cleanFunc = nil
 		end
 
+		cancelWaterTask()
+		clearWaterRegion()
 		local terrain = workspace:FindFirstChildOfClass('Terrain')
-		if terrain then
-			terrain:Clear()
+		if terrain and terrainSettings.WaterColor then
+			for property, value in terrainSettings do
+				pcall(function()
+					terrain[property] = value
+				end)
+			end
 		end
+		table.clear(terrainSettings)
 
 		if originalSettings.Ambient then
 			lightingService.Ambient = originalSettings.Ambient
@@ -267,6 +307,13 @@ return function(vape, entitylib)
 
 		local terrain = workspace:FindFirstChildOfClass('Terrain')
 		if terrain then
+			for _, property in {'WaterColor', 'WaterReflectance', 'WaterTransparency', 'WaterWaveSize', 'WaterWaveSpeed'} do
+				if terrainSettings[property] == nil then
+					pcall(function()
+						terrainSettings[property] = terrain[property]
+					end)
+				end
+			end
 			local existingCloud = terrain:FindFirstChild('MadeCloud')
 			if existingCloud then
 				existingCloud:Destroy()
@@ -329,64 +376,142 @@ return function(vape, entitylib)
 					end
 				end)('block')
 
-				local activeEntity = getEntityLibrary()
-				if activeEntity and activeEntity.isAlive and activeEntity.character and activeEntity.character.RootPart then
-					local root = activeEntity.character.RootPart
+				local function getRoot()
+					local activeEntity = getEntityLibrary()
+					return activeEntity and activeEntity.isAlive and activeEntity.character
+						and activeEntity.character.RootPart or nil
+				end
+
+				local function mapReady(root)
+					-- Do not sample the lobby/skybox. BedWars can publish a Map object
+					-- before the player is teleported into the live Worlds model, so
+					-- require a non-zero team and nearby replicated map geometry for a
+					-- short stable window before creating any terrain water.
+					if lastRootPosition and (root.Position - lastRootPosition).Magnitude > 24 then
+						-- A lobby-to-match teleport (or a respawn) must invalidate the
+						-- previous water plane before another one is allowed.
+						mapReadySince = 0
+						rootStableSince = 0
+						clearWaterRegion()
+					end
+					lastRootPosition = root.Position
+					if rootStableSince == 0 then rootStableSince = tick() end
+					local mapRoot = workspace:FindFirstChild('Map')
+					local worlds = mapRoot and mapRoot:FindFirstChild('Worlds')
+					local team = localPlayer:GetAttribute('Team')
+					if not worlds or #worlds:GetChildren() == 0 or team == nil
+						or team == 0 or team == '0' or team == '' or not root then
+						mapReadySince = 0
+						return false
+					end
+					local nearby = false
+					for _, block in storeBlocks do
+						if block and block.Parent and block:IsA('BasePart')
+							and block:IsDescendantOf(worlds)
+							and (Vector3.new(block.Position.X, 0, block.Position.Z)
+								- Vector3.new(root.Position.X, 0, root.Position.Z)).Magnitude <= 350
+							and math.abs(block.Position.Y - root.Position.Y) <= 300 then
+							nearby = true
+							break
+						end
+					end
+					if not nearby then
+						mapReadySince = 0
+						return false
+					end
+					if mapReadySince == 0 then mapReadySince = tick() end
+					return tick() - mapReadySince >= 1 and tick() - rootStableSince >= 0.75
+				end
+
+				local function findSafeWaterY(root)
+					if not root or not mapReady(root) then return end
+					local rootPosition = root.Position
+					local mapRoot = workspace:FindFirstChild('Map')
+					local worlds = mapRoot and mapRoot:FindFirstChild('Worlds')
+					local lowest = math.huge
+					for _, block in storeBlocks do
+						if block and block.Parent and block:IsA('BasePart')
+							and worlds and block:IsDescendantOf(worlds) then
+							local position = block.Position
+							-- Ignore geometry far from the live character and never accept
+							-- a surface above the current character.
+							if math.abs(position.X - rootPosition.X) > 350
+								or math.abs(position.Z - rootPosition.Z) > 350 then
+								continue
+							end
+							-- Ignore lobby/skybox geometry and never accept a surface
+							-- which is at or above the current character.
+							if position.Y < rootPosition.Y - 4 then
+								lowest = math.min(lowest, position.Y)
+							end
+						end
+					end
+					if lowest == math.huge then return end
+					-- Keep a generous vertical gap below the player even if a stale
+					-- lobby block was present during the initial load.  Terrain voxels
+					-- are four studs tall, so the top of the fill is kept at least 16
+					-- studs below the current root.
+					local safeY = math.min(lowest - 4, rootPosition.Y - 16)
+					return safeY <= rootPosition.Y - 16 and safeY or nil
+				end
+
+				local function fillSafeWater(root, waterY)
 					local terrain = workspace:FindFirstChildOfClass('Terrain')
-					local waterPosition = 0
-
-					if terrain then
-						local attempts = 0
-						while #storeBlocks == 0 and attempts < 50 do
-							task.wait(0.1)
-							attempts += 1
-						end
-
-						if #storeBlocks > 0 then
-							local lowestPosition = math.huge
-							for _, block in storeBlocks do
-								if block and block.Position then
-									local ray = workspace:Raycast(block.Position + Vector3.new(0, 800, 0), Vector3.new(0, -1000, 0))
-									if ray and ray.Position.Y <= lowestPosition then
-										lowestPosition = ray.Position.Y
-									end
-								end
-							end
-
-							if lowestPosition < math.huge then
-								waterPosition = lowestPosition
-							end
-						end
-
-						terrain:FillBlock(
-							CFrame.new(root.Position.X, waterPosition, root.Position.Z),
-							Vector3.new(5000, 0.01, 5000),
-							Enum.Material.Water
-						)
-
+					if not terrain or not root or not waterY then return end
+					clearWaterRegion()
+					if waterY >= root.Position.Y - 16 then return end
+					local region = {
+						CFrame = CFrame.new(root.Position.X, waterY - 2, root.Position.Z),
+						Size = Vector3.new(5000, 4, 5000),
+						TopY = waterY
+					}
+					pcall(function()
+						terrain:FillBlock(region.CFrame, region.Size, Enum.Material.Water)
 						terrain.WaterColor = Color3.fromRGB(0, 50, 60)
 						terrain.WaterReflectance = 0.7
 						terrain.WaterTransparency = 0.25
 						terrain.WaterWaveSize = 0.13
 						terrain.WaterWaveSpeed = 8
-					end
+						waterRegion = region
+					end)
+				end
 
-					local humanoid = activeEntity.character.Humanoid
+				cancelWaterTask()
+				local generation = waterGeneration
+				waterTask = task.spawn(function()
+					while Theme.Enabled and generation == waterGeneration do
+						local root = getRoot()
+						local waterY = findSafeWaterY(root)
+						if root and waterY then
+							local currentY = waterRegion and (waterRegion.TopY or waterRegion.CFrame.Position.Y)
+							if not currentY or math.abs(currentY - waterY) > 2
+								or currentY >= root.Position.Y - 16 then
+								fillSafeWater(root, waterY)
+							end
+						end
+						task.wait(waterRegion and 1 or 0.25)
+					end
+				end)
+
+				local activeEntity = getEntityLibrary()
+				local humanoid = activeEntity and activeEntity.character and activeEntity.character.Humanoid
+				if humanoid then
+					humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+				end
+
+				characterConnection = localPlayer.CharacterAdded:Connect(function(character)
+					if not Theme.Enabled then return end
+					mapReadySince = 0
+					rootStableSince = 0
+					lastRootPosition = nil
+					clearWaterRegion()
+					local humanoid = character:WaitForChild('Humanoid', 10)
 					if humanoid then
 						humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
 					end
-
-					characterConnection = localPlayer.CharacterAdded:Connect(function(character)
-						if not Theme.Enabled then
-							return
-						end
-
-						local humanoid = character:WaitForChild('Humanoid')
-						if humanoid then
-							humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
-						end
-					end)
-				end
+					-- The first character is often the lobby avatar.  The monitor above
+					-- recalculates after the server teleports the new avatar to its base.
+				end)
 			end)
 		end
 
