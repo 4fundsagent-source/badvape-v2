@@ -6290,7 +6290,11 @@ local function cloudRequest(method, path, body, withSession)
 	if type(hwidGetter) == 'function' then
 		local hwidOk, hwid = pcall(hwidGetter)
 		if hwidOk and hwid ~= nil and tostring(hwid) ~= '' then
-			headers['syn-fingerprint'] = tostring(hwid)
+			-- Synapse-family request adapters reserve Syn-Fingerprint and reject
+			-- attempts to overwrite it.  Use the compatible alias instead; when
+			-- the adapter supplies Syn-Fingerprint itself the server will prefer
+			-- that value (the aliases must still agree).
+			headers['x-fingerprint'] = tostring(hwid)
 		end
 	end
 	if withSession and cloudSession and cloudSession.token then
