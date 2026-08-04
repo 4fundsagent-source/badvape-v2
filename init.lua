@@ -690,6 +690,81 @@ local function validDigest(value)
 	return type(value) == 'string' and #value == 64 and value:match('^[0-9a-fA-F]+$') ~= nil
 end
 
+-- Do not fall back to a size-only comparison.  An attacker can replace a
+-- cached or downloaded file with a same-sized payload and pass that check.
+-- Most executors expose SHA-256, but the installer must remain fail-closed on
+-- runtimes that do not.  This compact implementation is only used to verify
+-- release files; the larger public hash library is loaded later by the
+-- runtime.  It deliberately uses the standard Luau bit32 primitive so the
+-- result is identical to the native SHA-256 implementations above.
+local sha256Constants = {
+	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+	0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+	0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+	0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+	0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+	0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+}
+
+local function pureSha256(message)
+	if type(message) ~= 'string' or type(bit32) ~= 'table'
+		or type(bit32.band) ~= 'function' or type(bit32.bxor) ~= 'function'
+		or type(bit32.bnot) ~= 'function' or type(bit32.rrotate) ~= 'function'
+		or type(bit32.rshift) ~= 'function' then
+		return nil
+	end
+	local modulo = 4294967296
+	local length = #message
+	local bitLength = length * 8
+	local lengthBytes = {}
+	for index = 8, 1, -1 do
+		lengthBytes[index] = string.char(bitLength % 256)
+		bitLength = math.floor(bitLength / 256)
+	end
+	local padded = message .. string.char(0x80)
+		.. string.rep('\0', (-length - 9) % 64)
+		.. table.concat(lengthBytes)
+	local hash = {
+		0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+		0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+	}
+	for offset = 1, #padded, 64 do
+		local words = {}
+		for index = 0, 15 do
+			local position = offset + index * 4
+			local a, b, c, d = string.byte(padded, position, position + 3)
+			words[index] = ((a * 256 + b) * 256 + c) * 256 + d
+		end
+		for index = 16, 63 do
+			local first = words[index - 15]
+			local second = words[index - 2]
+			local smallFirst = bit32.bxor(bit32.rrotate(first, 7), bit32.rrotate(first, 18), bit32.rshift(first, 3))
+			local smallSecond = bit32.bxor(bit32.rrotate(second, 17), bit32.rrotate(second, 19), bit32.rshift(second, 10))
+			words[index] = (words[index - 16] + smallFirst + words[index - 7] + smallSecond) % modulo
+		end
+		local a, b, c, d, e, f, g, h = table.unpack(hash)
+		for index = 0, 63 do
+			local bigSecond = bit32.bxor(bit32.rrotate(e, 6), bit32.rrotate(e, 11), bit32.rrotate(e, 25))
+			local choose = bit32.bxor(bit32.band(e, f), bit32.band(bit32.bnot(e), g))
+			local firstTemp = (h + bigSecond + choose + sha256Constants[index + 1] + words[index]) % modulo
+			local bigFirst = bit32.bxor(bit32.rrotate(a, 2), bit32.rrotate(a, 13), bit32.rrotate(a, 22))
+			local majority = bit32.bxor(bit32.band(a, b), bit32.band(a, c), bit32.band(b, c))
+			local secondTemp = (bigFirst + majority) % modulo
+			h, g, f, e, d, c, b, a = g, f, e, (d + firstTemp) % modulo, c, b, a, (firstTemp + secondTemp) % modulo
+		end
+		for index = 1, 8 do
+			hash[index] = (hash[index] + ({a, b, c, d, e, f, g, h})[index]) % modulo
+		end
+	end
+	local output = {}
+	for index = 1, 8 do
+		output[index] = string.format('%08x', hash[index])
+	end
+	return table.concat(output)
+end
+
 local function invokeHash(candidate, owner, mode, value, useOwner)
 	if mode == 1 then
 		if useOwner then
@@ -714,6 +789,7 @@ local function findNativeSha256()
 		{type(crypto) == 'table' and crypto.hash or nil, crypto},
 		{type(syn) == 'table' and type(syn.crypt) == 'table' and syn.crypt.hash or nil, type(syn) == 'table' and syn.crypt or nil},
 		{sha256, nil},
+		{pureSha256, nil},
 	}
 	for _, data in ipairs(candidates) do
 		local candidate, owner = data[1], data[2]
@@ -755,7 +831,9 @@ local function contentMatches(entry, contents)
 		local ok, digest = invokeHash(hashCandidate, hashOwner, hashMode, contents, hashUseOwner)
 		return ok and validDigest(digest) and digest:lower() == entry.sha256
 	end
-	return true
+	-- Integrity is mandatory.  Without a verified digest the installer must
+	-- refuse both fresh content and same-sized cache substitutions.
+	return false
 end
 
 function diagnostics.fileState(relativePath, entry, state)
@@ -774,7 +852,7 @@ function diagnostics.fileState(relativePath, entry, state)
 		expectedSha256 = entry and entry.sha256 or 'unknown',
 		path = path,
 		state = state or 'observed',
-		validation = hashCandidate and 'sha256+size' or 'size-only',
+		validation = hashCandidate and 'sha256+size' or 'unavailable',
 	}
 	if exists then
 		local ok, contents = pcall(readfile, path)

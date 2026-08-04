@@ -410,8 +410,14 @@ end
 
 -- Some executors report IsLoaded=false forever when injected after the client
 -- is usable. Prefer a ready PlayerGui and keep both waits bounded.
-local readyDeadline = tick() + 15
-while tick() < readyDeadline do
+local function runtimeClock()
+	if type(tick) == 'function' then return tick() end
+	if type(os) == 'table' and type(os.clock) == 'function' then return os.clock() end
+	return 0
+end
+
+local readyDeadline = runtimeClock() + 15
+while runtimeClock() < readyDeadline do
 	local ready = false
 	pcall(function()
 		ready = game:IsLoaded()
@@ -422,8 +428,14 @@ while tick() < readyDeadline do
 end
 
 local function waitForLocalPlayer()
-	local deadline = tick() + 30
-	while tick() < deadline do
+	-- Preserve one scheduler yield even when the player is already available;
+	-- this lets Roblox finish wiring PlayerGui before the first module load.
+	task.wait()
+	local now = type(tick) == 'function' and tick
+		or (type(os) == 'table' and type(os.clock) == 'function' and os.clock)
+		or function() return 0 end
+	local deadline = now() + 30
+	while now() < deadline do
 		local localPlayer = playersService.LocalPlayer
 		if localPlayer and localPlayer:FindFirstChild('PlayerGui') then
 			return localPlayer

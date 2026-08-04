@@ -3098,6 +3098,38 @@ function mainapi:CreateNotification(title, text, duration, type)
 	end)
 end
 
+-- Older BedWars profiles used names from the external module pack. Resolve
+-- only verified equivalents so loading a profile never creates duplicate GUI
+-- modules or silently selects a different feature.
+local moduleNameAliases = {
+	AutoGrim = 'Auto Reaper',
+	AutoBeekeeper = 'Auto Beekeeper',
+	AutoDavey = 'Auto Davey',
+	AutoDrill = 'Auto Drill',
+	AutoRagnar = 'Auto Ragnar',
+	AutoKrystal = 'Auto Krystal',
+	AutoZeno = 'Auto Zeno',
+	AutoBank = 'Auto Bank',
+	AutoCyber = 'Auto Cyber',
+	BedPatcher = 'Auto Bed Patcher',
+	CheatDetector = 'Cheat Detector',
+	DeviceSpoofer = 'Device Spoofer',
+	DaveyAim = 'Davey Aim',
+	JadeExtender = 'Jade Extender',
+	PhaseMine = 'Phase Mine',
+	SilentAura = 'Silent Aura',
+	SkinChanger = 'Skin Changer',
+	VoidRegentExtender = 'Void Regent Extender',
+	VulcanAssist = 'Vulcan Aimbot',
+	CatExtender = 'Yamini Extender',
+	YuziExtender = 'Yuzi Extender',
+}
+
+local function resolveModuleName(modules, name)
+	if modules[name] then return name end
+	return moduleNameAliases[name] or name
+end
+
 function mainapi:Load(skipgui, profile)
 	if not skipgui then
 		self.GUIColor:SetValue(nil, nil, nil, 4)
@@ -3185,18 +3217,25 @@ function mainapi:Load(skipgui, profile)
 		end
 
 		for i, v in savedata.Modules do
-			local object = self.Modules[i]
+			local resolvedName = resolveModuleName(self.Modules, i)
+			local object = self.Modules[resolvedName]
+			local legitObject
+			if not object then
+				resolvedName = resolveModuleName(self.Legit.Modules, i)
+				legitObject = self.Legit.Modules[resolvedName]
+				object = legitObject
+			end
 			if not object then continue end
 			if object.Options and v.Options then
 				self:LoadOptions(object, v.Options)
 			end
 			if v.Enabled ~= object.Enabled then
 				if skipgui then
-					if self.ToggleNotifications.Enabled then self:CreateNotification('Module Toggled', i.."<font color='#FFFFFF'> has been </font>"..(v.Enabled and "<font color='#5AFF5A'>Enabled</font>" or "<font color='#FF5A5A'>Disabled</font>").."<font color='#FFFFFF'>!</font>", 0.75) end
+					if self.ToggleNotifications.Enabled then self:CreateNotification('Module Toggled', resolvedName.."<font color='#FFFFFF'> has been </font>"..(v.Enabled and "<font color='#5AFF5A'>Enabled</font>" or "<font color='#FF5A5A'>Disabled</font>").."<font color='#FFFFFF'>!</font>", 0.75) end
 				end
-				object:Toggle(true)
+				if legitObject then object:Toggle() else object:Toggle(true) end
 			end
-			object:SetBind(v.Bind)
+			if not legitObject then object:SetBind(v.Bind) end
 		end
 
 		for i, v in savedata.Legit do
@@ -3598,6 +3637,357 @@ mainapi:CreateCategoryList({
 	WindowSize = 250,
 	Profiles = true
 })
+
+--[[
+	Cloud Configs
+
+	Keep the compatibility GUI feature-complete with the new layout.  Public
+	metadata is listed first; the profile payload is downloaded only after the
+	user selects an entry and chooses Install.
+]]
+local cloudApiBase = tostring(shared.BadVapeCloudApiBase or 'https://luvit.cc/badvape-api/v1/cloud'):gsub('/+$', '')
+local cloudSessionPath = 'badvape/cache/cloud-session.json'
+local cloudEntries = {}
+local cloudUpdating = false
+local cloudPage = 1
+local cloudPageSize = 50
+local cloudTotal = 0
+local cloudSelectedId
+local cloudSession
+
+local function cloudUrlEncode(value)
+	if type(httpService.UrlEncode) == 'function' then
+		local ok, encoded = pcall(httpService.UrlEncode, httpService, tostring(value or ''))
+		if ok and type(encoded) == 'string' then return encoded end
+	end
+	return tostring(value or ''):gsub('[^%w%-%._~]', function(char)
+		return string.format('%%%02X', string.byte(char))
+	end)
+end
+
+local function cloudSafeName(value, fallback)
+	value = tostring(value or ''):gsub('^%s+', ''):gsub('%s+$', '')
+	if value == '' then value = fallback or '' end
+	if #value < 1 or #value > 64 or value:find('[\\/:*%?"<>|]') or value:find('%.%.')
+		or not value:match('^[%w _%-%(%)%.]+$') then
+		return nil
+	end
+	return value
+end
+
+local function cloudDecode(body)
+	if type(body) ~= 'string' or body == '' then return nil end
+	local ok, result = pcall(httpService.JSONDecode, httpService, body)
+	return ok and type(result) == 'table' and result or nil
+end
+
+local function cloudPrepareGui(remoteGui, previousGui, installName)
+	if type(remoteGui) ~= 'table' then return nil end
+	local merged = {}
+	for key, value in pairs(remoteGui) do merged[key] = value end
+	local previous = type(previousGui) == 'string' and cloudDecode(previousGui) or nil
+	local profiles = {}
+	local sourceProfiles = type(previous) == 'table' and previous.Profiles or mainapi.Profiles
+	if type(sourceProfiles) == 'table' then
+		for _, profile in ipairs(sourceProfiles) do
+			if type(profile) == 'table' and type(profile.Name) == 'string' then
+				local copy = {}
+				for key, value in pairs(profile) do copy[key] = value end
+				table.insert(profiles, copy)
+			end
+		end
+	end
+	local wanted = tostring(installName or '')
+	local found = false
+	for _, profile in ipairs(profiles) do
+		if string.lower(tostring(profile.Name or '')) == string.lower(wanted) then found = true break end
+	end
+	if not found and wanted ~= '' then table.insert(profiles, {Name = wanted, Bind = {}}) end
+	merged.Profiles = profiles
+	merged.Profile = wanted
+	return merged
+end
+
+local function cloudRestoreFile(path, previous)
+	if previous ~= nil then
+		pcall(writefile, path, previous)
+	elseif type(delfile) == 'function' and isfile(path) then
+		pcall(delfile, path)
+	end
+end
+
+local function cloudRequest(method, path, body, withSession)
+	local senders, seen = {}, {}
+	local function addSender(candidate)
+		if type(candidate) == 'function' and not seen[candidate] then
+			seen[candidate] = true
+			table.insert(senders, candidate)
+		end
+	end
+	addSender(type(http) == 'table' and http.request or nil)
+	addSender(request)
+	addSender(requestDirect)
+	addSender(http_request)
+	if type(syn) == 'table' then addSender(syn.request) end
+	if type(fluxus) == 'table' then addSender(fluxus.request) end
+	if type(krnl) == 'table' then addSender(krnl.request) end
+	if #senders == 0 then return nil, 'request unavailable' end
+	local headers = {['Accept'] = 'application/json', ['Content-Type'] = 'application/json'}
+	local hwidGetter = type(gethwid) == 'function' and gethwid or (type(get_hwid) == 'function' and get_hwid)
+	if type(hwidGetter) == 'function' then
+		local ok, hwid = pcall(hwidGetter)
+		if ok and hwid ~= nil and tostring(hwid) ~= '' then headers['syn-fingerprint'] = tostring(hwid) end
+	end
+	if withSession and cloudSession and cloudSession.token then
+		headers.Authorization = 'Bearer '..cloudSession.token
+	end
+	local options = {
+		Url = cloudApiBase..path,
+		Method = method,
+		Headers = headers
+	}
+	if body ~= nil then options.Body = httpService:JSONEncode(body) end
+	local lastError = 'network error'
+	for _, send in ipairs(senders) do
+		local ok, response = pcall(send, options)
+		if ok and type(response) == 'table' then
+			local status = tonumber(response.StatusCode or response.Status or response.status_code or response.status)
+			local decoded = cloudDecode(response.Body or response.body or response.ResponseBody or response.responseBody)
+			if type(decoded) == 'table' and decoded.ok ~= false
+				and (status == nil or (status >= 200 and status < 300) or response.Success == true) then
+				return decoded
+			end
+			status = status or 0
+			if status > 0 then
+				return nil, decoded and tostring(decoded.code or 'request failed') or ('http '..status)
+			end
+			lastError = decoded and tostring(decoded.code or 'request failed') or 'empty response'
+		else
+			lastError = ok and 'invalid response' or tostring(response or 'network error')
+		end
+	end
+	return nil, lastError
+end
+
+local function cloudSessionValid()
+	return type(cloudSession) == 'table'
+		and type(cloudSession.token) == 'string'
+		and #cloudSession.token >= 32 and #cloudSession.token <= 128
+		and type(cloudSession.expiresAt) == 'number'
+		and cloudSession.expiresAt > os.time() * 1000 + 5000
+		and tostring(cloudSession.placeId) == tostring(mainapi.Place)
+end
+
+local function authenticateCloud()
+	if cloudSessionValid() then return true end
+	if isfile(cloudSessionPath) then
+		local ok, cached = pcall(function() return cloudDecode(readfile(cloudSessionPath)) end)
+		if ok and type(cached) == 'table' then cloudSession = cached end
+	end
+	if cloudSessionValid() then return true end
+	if type(license) ~= 'table' or type(license.Key) ~= 'string' or license.Key == '' then
+		return false, 'license unavailable'
+	end
+	local response, err = cloudRequest('POST', '/session', {
+		key = license.Key,
+		placeId = tostring(mainapi.Place),
+		nonce = httpService:GenerateGUID(false)..httpService:GenerateGUID(false)
+	}, false)
+	if not response then return false, err end
+	if type(response.token) ~= 'string' or type(response.expiresAt) ~= 'number' then
+		return false, 'invalid cloud session'
+	end
+	cloudSession = {
+		token = response.token,
+		expiresAt = response.expiresAt,
+		placeId = tostring(mainapi.Place),
+		productKey = response.productKey
+	}
+	pcall(function()
+		if not isfolder('badvape/cache') then makefolder('badvape/cache') end
+		writefile(cloudSessionPath, httpService:JSONEncode(cloudSession))
+	end)
+	return true
+end
+
+local function invalidateCloudSession()
+	cloudSession = nil
+	pcall(function() if isfile(cloudSessionPath) and delfile then delfile(cloudSessionPath) end end)
+end
+
+local cloudConfigs = mainapi:CreateCategoryList({
+	Name = 'Cloud Configs',
+	Icon = getcustomasset('badvape/assets/old/profilesicon.png'),
+	Placeholder = 'Choose config',
+	WindowSize = 250,
+	Function = function()
+		if cloudUpdating then return end
+		local enabled = cloudConfigs.ListEnabled or {}
+		cloudSelectedId = enabled and cloudEntries[enabled[#enabled]] and cloudEntries[enabled[#enabled]].id or nil
+		if enabled and #enabled > 1 then
+			cloudUpdating = true
+			for i = 1, #enabled - 1 do
+				local index = table.find(cloudConfigs.ListEnabled, enabled[i])
+				if index then table.remove(cloudConfigs.ListEnabled, index) end
+			end
+			cloudConfigs:ChangeValue()
+			cloudUpdating = false
+		end
+	end
+})
+local cloudSearch = cloudConfigs:CreateTextBox({Name = 'Search', Placeholder = 'name or description', Function = function() cloudPage = 1 end})
+local cloudSort = cloudConfigs:CreateDropdown({Name = 'Sort', List = {'recent', 'rating', 'installs', 'name'}, Function = function() cloudPage = 1 end})
+local cloudUploadName = cloudConfigs:CreateTextBox({Name = 'Upload name', Placeholder = 'name shown to others'})
+local cloudDescription = cloudConfigs:CreateTextBox({Name = 'Description', Placeholder = 'short description'})
+local cloudInstallName = cloudConfigs:CreateTextBox({Name = 'Install as', Placeholder = 'local profile name'})
+local cloudRating = cloudConfigs:CreateDropdown({Name = 'Rating', List = {'1', '2', '3', '4', '5'}})
+local function cloudNotify(text, kind) mainapi:CreateNotification('Cloud Configs', text, 7, kind) end
+local function cloudFindEntry(id)
+	for _, item in pairs(cloudEntries) do if type(item) == 'table' and item.id == id then return item end end
+end
+local function cloudShouldReauthenticate(err)
+	return err == 'cloud_session_required' or err == 'auth_failed'
+		or err == 'session_invalid' or err == 'hwid_mismatch'
+		or err == 'uid_requires_bound_device'
+end
+local function cloudRequestAuthenticated(method, path, body)
+	local response, err = cloudRequest(method, path, body, true)
+	if not response and cloudShouldReauthenticate(err) then
+		invalidateCloudSession()
+		local authenticated, authError = authenticateCloud()
+		if authenticated then response, err = cloudRequest(method, path, body, true)
+		else err = authError end
+	end
+	if not response and cloudShouldReauthenticate(err) then invalidateCloudSession() end
+	return response, err
+end
+local function cloudSpawn(callback)
+	task.spawn(function()
+		local completed, failure = xpcall(callback, function(errorMessage) return tostring(errorMessage) end)
+		if not completed then cloudNotify('Cloud operation failed: '..tostring(failure), 'warning') end
+	end)
+end
+local function cloudRefresh()
+	if cloudUpdating then return end
+	cloudUpdating = true
+	task.spawn(function()
+		local completed, failure = xpcall(function()
+		local authenticated, authError = authenticateCloud()
+		if not authenticated then cloudNotify('Cloud authentication failed: '..tostring(authError), 'warning'); cloudUpdating = false; return end
+		local function fetch()
+			return cloudRequestAuthenticated('GET', '/configs?q='..cloudUrlEncode(cloudSearch.Value)
+				..'&sort='..tostring(cloudSort.Value or 'recent')
+				..'&page='..tostring(cloudPage)
+				..'&limit='..tostring(cloudPageSize)
+				..'&placeId='..tostring(mainapi.Place), nil, true)
+		end
+		local response, err = fetch()
+		if not response then
+			if cloudShouldReauthenticate(err) then invalidateCloudSession() end
+			cloudNotify('Could not load cloud configs: '..tostring(err), 'warning'); cloudUpdating = false; return
+		end
+		cloudEntries = {}; cloudSelectedId = nil; cloudConfigs.List = {}; cloudConfigs.ListEnabled = {}
+		cloudTotal = tonumber(response.total) or 0
+		for _, item in ipairs(response.items or {}) do
+			local name = tostring(item.name or 'Unnamed')
+			local label = name..' | '..string.format('%.1f', tonumber(item.ratingAverage) or 0)..' stars | '..tostring(item.installs or 0)..' installs'
+			local suffix = 2
+			while cloudEntries[label] do label = name..' ('..suffix..')'; suffix += 1 end
+			cloudEntries[label] = item; table.insert(cloudConfigs.List, label)
+		end
+		cloudConfigs:ChangeValue(); cloudUpdating = false
+		local pageCount = math.max(1, math.ceil(cloudTotal / cloudPageSize))
+		cloudNotify('Cloud configs refreshed (page '..tostring(cloudPage)..'/'..tostring(pageCount)..').', 'info')
+		end, function(errorMessage) return tostring(errorMessage) end)
+		if not completed then
+			cloudUpdating = false
+			cloudNotify('Cloud refresh failed: '..tostring(failure), 'warning')
+		end
+	end)
+end
+cloudConfigs:CreateButton({Name = 'Previous page', Function = function()
+	if cloudPage <= 1 then return cloudNotify('Already on the first page.', 'info') end
+	cloudPage -= 1; cloudRefresh()
+end})
+cloudConfigs:CreateButton({Name = 'Next page', Function = function()
+	if cloudPage * cloudPageSize >= cloudTotal then return cloudNotify('Already on the last page.', 'info') end
+	cloudPage += 1; cloudRefresh()
+end})
+cloudConfigs:CreateButton({Name = 'Refresh', Function = cloudRefresh})
+cloudConfigs:CreateButton({Name = 'Upload current', Function = function()
+	cloudSpawn(function()
+		local name = cloudSafeName(cloudUploadName.Value, mainapi.Profile)
+		if not name then return cloudNotify('Choose a valid upload name.', 'warning') end
+		local authenticated, authError = authenticateCloud()
+		if not authenticated then return cloudNotify('Cloud authentication failed: '..tostring(authError), 'warning') end
+		pcall(mainapi.Save, mainapi)
+		local configPath = 'badvape/profiles/'..mainapi.Profile..mainapi.Place..'.txt'
+		local guiPath = 'badvape/profiles/'..game.GameId..'.gui.txt'
+		if not isfile(configPath) or not isfile(guiPath) then return cloudNotify('Current profile files are unavailable.', 'warning') end
+		local config, guiData = cloudDecode(readfile(configPath)), cloudDecode(readfile(guiPath))
+		if not config or not guiData then return cloudNotify('Current profile JSON is invalid.', 'warning') end
+		local response, err = cloudRequestAuthenticated('POST', '/configs', {name = name, description = tostring(cloudDescription.Value or ''), config = config, gui = guiData})
+		if not response then return cloudNotify('Upload failed: '..tostring(err), 'warning') end
+		cloudNotify('Uploaded '..name..'.', 'info'); cloudRefresh()
+	end)
+end})
+cloudConfigs:CreateButton({Name = 'Install selected', Function = function()
+	cloudSpawn(function()
+		local selected = cloudFindEntry(cloudSelectedId)
+		if not selected then return cloudNotify('Select a cloud config first.', 'warning') end
+		local installName = cloudSafeName(cloudInstallName.Value, selected.name)
+		if not installName then return cloudNotify('Choose a valid install name.', 'warning') end
+		local configPath = 'badvape/profiles/'..installName..mainapi.Place..'.txt'
+		for _, profile in ipairs(mainapi.Profiles or {}) do
+			if string.lower(tostring(profile.Name or '')) == string.lower(installName) then
+				return cloudNotify('That local profile name already exists.', 'warning')
+			end
+		end
+		if isfile(configPath) then return cloudNotify('That local profile name already exists.', 'warning') end
+		local authenticated, authError = authenticateCloud()
+		if not authenticated then return cloudNotify('Cloud authentication failed: '..tostring(authError), 'warning') end
+		local response, err = cloudRequestAuthenticated('GET', '/configs/'..selected.id, nil)
+		if not response then return cloudNotify('Download failed: '..tostring(err), 'warning') end
+		local payload = response.config
+		if not payload or not payload.config or not payload.gui then return cloudNotify('Cloud payload is incomplete.', 'warning') end
+		local guiPath = 'badvape/profiles/'..game.GameId..'.gui.txt'
+		local previousConfig, previousGui, previousProfile = isfile(configPath) and readfile(configPath) or nil, isfile(guiPath) and readfile(guiPath) or nil, mainapi.Profile
+		local previousProfiles = {}; for index, profile in ipairs(mainapi.Profiles or {}) do previousProfiles[index] = profile end
+		local mergedGui = cloudPrepareGui(payload.gui, previousGui, installName)
+		local encodedConfigOk, encodedConfig = pcall(httpService.JSONEncode, httpService, payload.config)
+		local encodedGuiOk, encodedGui = pcall(httpService.JSONEncode, httpService, mergedGui)
+		if not encodedConfigOk or not encodedGuiOk then return cloudNotify('Cloud payload could not be encoded.', 'warning') end
+		local wrote = pcall(function()
+			writefile(configPath, encodedConfig); writefile(guiPath, encodedGui)
+			if not cloudDecode(readfile(configPath)) or not cloudDecode(readfile(guiPath)) then error('profile write verification failed') end
+		end)
+		if not wrote then cloudRestoreFile(configPath, previousConfig); cloudRestoreFile(guiPath, previousGui); return cloudNotify('Could not write the local profile.', 'warning') end
+		table.insert(mainapi.Profiles, {Name = installName, Bind = {}}); mainapi.Categories.Profiles:ChangeValue()
+		local loadedOk = pcall(mainapi.Load, mainapi, false, installName)
+		if not loadedOk or mainapi.Loaded ~= true then
+			cloudRestoreFile(configPath, previousConfig); cloudRestoreFile(guiPath, previousGui); mainapi.Profiles = previousProfiles; mainapi.Categories.Profiles:ChangeValue(); pcall(mainapi.Load, mainapi, false, previousProfile)
+			return cloudNotify('Local profile validation failed; install was not recorded.', 'warning')
+		end
+		pcall(mainapi.Save, mainapi)
+		local completed, completeError = cloudRequestAuthenticated('POST', '/configs/'..selected.id..'/install', {receipt = payload.installReceipt, revision = payload.revision, digest = payload.digest, installName = installName})
+		if not completed then
+			cloudRestoreFile(configPath, previousConfig); cloudRestoreFile(guiPath, previousGui); mainapi.Profiles = previousProfiles; mainapi.Categories.Profiles:ChangeValue(); pcall(mainapi.Load, mainapi, false, previousProfile)
+			return cloudNotify('Install receipt failed: '..tostring(completeError), 'warning')
+		end
+		cloudNotify('Installed as '..installName..'. You can now rate it.', 'info'); cloudRefresh()
+	end)
+end})
+cloudConfigs:CreateButton({Name = 'Rate selected', Function = function()
+	cloudSpawn(function()
+		if not cloudSelectedId then return cloudNotify('Select a cloud config first.', 'warning') end
+		local authenticated, authError = authenticateCloud()
+		if not authenticated then return cloudNotify('Cloud authentication failed: '..tostring(authError), 'warning') end
+		local selected = cloudFindEntry(cloudSelectedId)
+		local response, err = cloudRequestAuthenticated('POST', '/configs/'..cloudSelectedId..'/rating', {revision = selected and selected.revision or 1, rating = tonumber(cloudRating.Value)})
+		if not response then return cloudNotify('Rating failed: '..tostring(err), 'warning') end
+		cloudNotify('Rating saved.', 'info'); cloudRefresh()
+	end)
+end})
 
 --[[
 	Targets

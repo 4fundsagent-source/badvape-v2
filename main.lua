@@ -465,150 +465,11 @@ local function showProfileUpdateMenu()
 		table.insert(staged, {item = item, contents = contents})
 	end
 
-	local function accentColor()
-		local guiColor = vape.GUIColor
-		if type(guiColor) == 'table'
-			and type(guiColor.Hue) == 'number'
-			and type(guiColor.Sat) == 'number'
-			and type(guiColor.Value) == 'number' then
-			return Color3.fromHSV(guiColor.Hue, guiColor.Sat, guiColor.Value)
-		end
-		return Color3.fromRGB(85, 170, 255)
-	end
-
-	local modal = Instance.new('Frame')
-	modal.Name = 'ProfileUpdateMenu'
-	modal.Size = UDim2.fromScale(1, 1)
-	modal.BackgroundColor3 = Color3.new(0, 0, 0)
-	modal.BackgroundTransparency = 0.38
-	modal.BorderSizePixel = 0
-	modal.ZIndex = 100
-	modal.Parent = vape.gui
-	if type(vape.Clean) == 'function' then
-		vape:Clean(function()
-			if modal and modal.Parent then
-				modal:Destroy()
-			end
-		end)
-	end
-
-	local blocker = Instance.new('TextButton')
-	blocker.Name = 'InputBlocker'
-	blocker.Size = UDim2.fromScale(1, 1)
-	blocker.BackgroundTransparency = 1
-	blocker.BorderSizePixel = 0
-	blocker.Text = ''
-	blocker.Modal = true
-	blocker.ZIndex = 100
-	blocker.Parent = modal
-
-	local panel = Instance.new('Frame')
-	panel.Name = 'Panel'
-	panel.AnchorPoint = Vector2.new(0.5, 0.5)
-	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(470, 238)
-	panel.BackgroundColor3 = Color3.fromRGB(28, 28, 31)
-	panel.BorderSizePixel = 0
-	panel.ZIndex = 101
-	panel.Parent = modal
-
-	local panelCorner = Instance.new('UICorner')
-	panelCorner.CornerRadius = UDim.new(0, 6)
-	panelCorner.Parent = panel
-	local panelStroke = Instance.new('UIStroke')
-	panelStroke.Color = Color3.fromRGB(75, 75, 82)
-	panelStroke.Transparency = 0.2
-	panelStroke.Parent = panel
-
-	local title = Instance.new('TextLabel')
-	title.Name = 'Title'
-	title.Position = UDim2.fromOffset(22, 17)
-	title.Size = UDim2.new(1, -44, 0, 27)
-	title.BackgroundTransparency = 1
-	title.Text = 'BadVape profile update'
-	title.TextColor3 = Color3.fromRGB(235, 235, 240)
-	title.TextSize = 20
-	title.Font = Enum.Font.GothamSemibold
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.ZIndex = 102
-	title.Parent = panel
-
-	local description = Instance.new('TextLabel')
-	description.Name = 'Description'
-	description.Position = UDim2.fromOffset(22, 52)
-	description.Size = UDim2.new(1, -44, 0, 57)
-	description.BackgroundTransparency = 1
-	description.Text = 'Updated default profiles are available. Override the built-in default, install updates as new profiles, or keep everything unchanged.'
-	description.TextColor3 = Color3.fromRGB(180, 180, 188)
-	description.TextSize = 14
-	description.Font = Enum.Font.Gotham
-	description.TextWrapped = true
-	description.TextXAlignment = Enum.TextXAlignment.Left
-	description.TextYAlignment = Enum.TextYAlignment.Top
-	description.ZIndex = 102
-	description.Parent = panel
-
 	local updateNames = {}
 	for _, entry in ipairs(staged) do
 		local name = profileBase(entry.item) or 'profile'
 		table.insert(updateNames, name)
 	end
-	local summary = Instance.new('TextLabel')
-	summary.Name = 'Profiles'
-	summary.Position = UDim2.fromOffset(22, 112)
-	summary.Size = UDim2.new(1, -44, 0, 20)
-	summary.BackgroundTransparency = 1
-	summary.Text = 'Updated: '..table.concat(updateNames, ', ')
-	summary.TextColor3 = Color3.fromRGB(145, 145, 153)
-	summary.TextSize = 13
-	summary.Font = Enum.Font.Gotham
-	summary.TextXAlignment = Enum.TextXAlignment.Left
-	summary.ZIndex = 102
-	summary.Parent = panel
-
-	local actions = Instance.new('Frame')
-	actions.Name = 'Actions'
-	actions.Position = UDim2.fromOffset(22, 160)
-	actions.Size = UDim2.new(1, -44, 0, 48)
-	actions.BackgroundTransparency = 1
-	actions.ZIndex = 102
-	actions.Parent = panel
-	local layout = Instance.new('UIListLayout')
-	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, 8)
-	layout.Parent = actions
-
-	local closed = false
-	local function closeMenu()
-		if closed then return end
-		closed = true
-		if modal then modal:Destroy() end
-	end
-
-	local function makeButton(name, text, width, color)
-		local button = Instance.new('TextButton')
-		button.Name = name
-		button.Size = UDim2.fromOffset(width, 38)
-		button.BackgroundColor3 = color
-		button.AutoButtonColor = true
-		button.BorderSizePixel = 0
-		button.Text = text
-		button.TextColor3 = Color3.fromRGB(240, 240, 245)
-		button.TextSize = 13
-		button.Font = Enum.Font.GothamSemibold
-		button.ZIndex = 103
-		button.Parent = actions
-		local corner = Instance.new('UICorner')
-		corner.CornerRadius = UDim.new(0, 4)
-		corner.Parent = button
-		return button
-	end
-
-	local nothingButton = makeButton('Nothing', 'Nothing', 82, Color3.fromRGB(60, 60, 67))
-	local installButton = makeButton('Install', 'Install', 88, Color3.fromRGB(70, 105, 135))
-	local overrideButton = makeButton('Override & Install', 'Override & Install', 142, accentColor())
 
 	local function destinationFor(name, item)
 		local place = type(item) == 'table' and tostring(item.path):match('^profiles/[%a_]+(%d+)%.txt$')
@@ -691,29 +552,91 @@ local function showProfileUpdateMenu()
 		return true
 	end
 
-	nothingButton.MouseButton1Click:Connect(function()
-		if type(updateApi.Mark) == 'function' then pcall(updateApi.Mark, 'skipped') end
-		vape:CreateNotification('BadVape', 'Profile update skipped.', 5, 'info')
-		closeMenu()
-	end)
-	installButton.MouseButton1Click:Connect(function()
-		if installProfiles() then
-			if type(updateApi.Mark) == 'function' then pcall(updateApi.Mark, 'installed') end
-			vape:CreateNotification('BadVape', 'Updated profiles were added to the Profiles tab.', 6, 'info')
-			closeMenu()
-		else
-			vape:CreateNotification('BadVape', 'Could not install the updated profiles.', 8, 'alert')
+	-- Use the same category/list/button components as the rest of the Vape UI.
+	-- This replaces the old ad-hoc modal and also means scaling/theme changes are
+	-- applied consistently. The temporary category removes itself after a choice.
+	-- The compatibility GUI does not expose the new GUI's global asset helper or
+	-- divider component, so resolve both through the loaded GUI when available and
+	-- degrade to a plain category when it is not.
+	local assetLoader = vape.Libraries and vape.Libraries.getcustomasset
+	local iconPath = 'badvape/assets/new/profilesicon.png'
+	local updateIcon = ''
+	if type(assetLoader) == 'function' then
+		local iconOk, icon = pcall(assetLoader, iconPath)
+		if iconOk and type(icon) == 'string' then updateIcon = icon end
+		if updateIcon == '' then
+			local fallbackOk, fallbackIcon = pcall(assetLoader, 'badvape/assets/old/profilesicon.png')
+			if fallbackOk and type(fallbackIcon) == 'string' then updateIcon = fallbackIcon end
 		end
-	end)
-	overrideButton.MouseButton1Click:Connect(function()
-		if overrideProfiles() then
-			if type(updateApi.Mark) == 'function' then pcall(updateApi.Mark, 'applied') end
-			vape:CreateNotification('BadVape', 'Updated profiles installed.', 6, 'info')
-			closeMenu()
-		else
-			vape:CreateNotification('BadVape', 'Could not apply the updated profiles.', 8, 'alert')
+	end
+	local updateSettings = {
+		Name = 'Profile Update',
+		Icon = updateIcon,
+		Placeholder = 'Profile update',
+		Color = Color3.fromRGB(85, 170, 255),
+		WindowSize = 250,
+		Size = UDim2.fromOffset(17, 10),
+		Position = UDim2.fromOffset(12, 16)
+	}
+	local updateMenu = vape:CreateCategoryList(updateSettings)
+	if type(updateMenu.CreateDivider) == 'function' then
+		updateMenu:CreateDivider('Updated: '..table.concat(updateNames, ', '))
+	end
+	local closed = false
+	local function closeMenu()
+		if closed then return end
+		closed = true
+		if type(vape.Remove) == 'function' then
+			pcall(vape.Remove, vape, 'Profile Update')
+		elseif updateMenu.Button and type(updateMenu.Button.Toggle) == 'function' then
+			pcall(updateMenu.Button.Toggle, updateMenu.Button)
 		end
-	end)
+	end
+	updateMenu:CreateButton({
+		Name = 'Nothing',
+		Tooltip = 'Keep the existing profiles unchanged',
+		Function = function()
+			if type(updateApi.Mark) == 'function' then pcall(updateApi.Mark, 'skipped') end
+			vape:CreateNotification('BadVape', 'Profile update skipped.', 5, 'info')
+			closeMenu()
+		end
+	})
+	updateMenu:CreateButton({
+		Name = 'Install',
+		Tooltip = 'Add updated profiles without replacing your defaults',
+		Function = function()
+			if installProfiles() then
+				if type(updateApi.Mark) == 'function' then pcall(updateApi.Mark, 'installed') end
+				vape:CreateNotification('BadVape', 'Updated profiles were added to the Profiles tab.', 6, 'info')
+				closeMenu()
+			else
+				vape:CreateNotification('BadVape', 'Could not install the updated profiles.', 8, 'alert')
+			end
+		end
+	})
+	updateMenu:CreateButton({
+		Name = 'Override & Install',
+		Tooltip = 'Apply the updated default profiles and install other updates',
+		Function = function()
+			if overrideProfiles() then
+				if type(updateApi.Mark) == 'function' then pcall(updateApi.Mark, 'applied') end
+				vape:CreateNotification('BadVape', 'Updated profiles installed.', 6, 'info')
+				closeMenu()
+			else
+				vape:CreateNotification('BadVape', 'Could not apply the updated profiles.', 8, 'alert')
+			end
+		end
+	})
+	if type(vape.Clean) == 'function' then
+		vape:Clean(function()
+			if not closed and type(vape.Remove) == 'function' then
+				pcall(vape.Remove, vape, 'Profile Update')
+			end
+		end)
+	end
+	if updateMenu.Button and type(updateMenu.Button.Toggle) == 'function' then
+		updateMenu.Button:Toggle()
+	end
 end
 
 if not isfile('badvape/profiles/gui.txt') then

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-376e84116a07d1f0fc787c4b5292eb415c9b95d82a1e131dbe5605ce488ccb61",
+  "revision": "sha256-18701b9fb9b23af795b52425a66cf70447c42ac88e54482b7801410670fbe656",
   "files": [
     {
       "path": "bootstrap.lua",
@@ -159,18 +159,18 @@
     },
     {
       "path": "guis/new.lua",
-      "bytes": 250388,
-      "sha256": "46d6d6db35f7ce1f1135166959bc952173c6e2eb0daa3f1118674743151f5e70"
+      "bytes": 271147,
+      "sha256": "92349e585d2587c7dde5649d3e7328a9fdfa3d4180855917aa60239411b11aa6"
     },
     {
       "path": "guis/old.lua",
-      "bytes": 144196,
-      "sha256": "f5f8146df2ff5e24a02c174f48c840a4c456bb3092f56f2b3b073512b64121d6"
+      "bytes": 162971,
+      "sha256": "13de2913d37eb4f04861bb45845e4da126e36439090d38c2a99325eac43f031c"
     },
     {
       "path": "init.lua",
-      "bytes": 45420,
-      "sha256": "fb769320799b189a3dbb6cf67cf0a4241c935e05d4d7bcbaa7d4da47b7c0a472"
+      "bytes": 49261,
+      "sha256": "7cb74b86c061216b3d7172f3815e8c1caab9b486928a05212610623c58d507f3"
     },
     {
       "path": "libraries/badvape-theme.lua",
@@ -229,13 +229,13 @@
     },
     {
       "path": "main.lua",
-      "bytes": 47148,
-      "sha256": "79b86c219a44bbd24a7627efbd7898b171d1bb79c20a000850901143bae9a820"
+      "bytes": 44831,
+      "sha256": "146355d55916fde125af01855a8164ea1aeb9ec5cb3e636d353184829cf9e66d"
     },
     {
       "path": "os.luau",
-      "bytes": 12133,
-      "sha256": "a20b5692f5a25d21bfe14b9d9b3063ddc4498a32df487b8a372b0da7139110d2"
+      "bytes": 12641,
+      "sha256": "18b1fe21223d3ae1a947395c2658e8252c934f33eb5a91f5f3e35ee3fee67bc4"
     },
     {
       "path": "profiles/2619619496.gui.txt",
