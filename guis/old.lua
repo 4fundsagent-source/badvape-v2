@@ -3821,22 +3821,28 @@ local function invalidateCloudSession()
 	pcall(function() if isfile(cloudSessionPath) and delfile then delfile(cloudSessionPath) end end)
 end
 
-local cloudConfigs = mainapi:CreateCategoryList({
+-- Forward-declare this control before constructing it. Lua does not make a
+-- local introduced in an initializer reliably visible to callbacks created by
+-- that initializer; without this, the first click can resolve a nil global.
+local cloudConfigs
+cloudConfigs = mainapi:CreateCategoryList({
 	Name = 'Cloud Configs',
 	Icon = getcustomasset('badvape/assets/old/profilesicon.png'),
 	Placeholder = 'Choose config',
 	WindowSize = 250,
 	Function = function()
 		if cloudUpdating then return end
-		local enabled = cloudConfigs.ListEnabled or {}
+		local control = cloudConfigs
+		if type(control) ~= 'table' then return end
+		local enabled = control.ListEnabled or {}
 		cloudSelectedId = enabled and cloudEntries[enabled[#enabled]] and cloudEntries[enabled[#enabled]].id or nil
 		if enabled and #enabled > 1 then
 			cloudUpdating = true
 			for i = 1, #enabled - 1 do
-				local index = table.find(cloudConfigs.ListEnabled, enabled[i])
-				if index then table.remove(cloudConfigs.ListEnabled, index) end
+				local index = table.find(control.ListEnabled, enabled[i])
+				if index then table.remove(control.ListEnabled, index) end
 			end
-			cloudConfigs:ChangeValue()
+			control:ChangeValue()
 			cloudUpdating = false
 		end
 	end

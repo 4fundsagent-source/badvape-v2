@@ -6386,7 +6386,11 @@ local function invalidateCloudSession()
 	end)
 end
 
-local cloudConfigs = mainapi:CreateCategoryList({
+-- Forward-declare this control before constructing it. Lua does not make a
+-- local introduced in an initializer reliably visible to callbacks created by
+-- that initializer; without this, the first click can resolve a nil global.
+local cloudConfigs
+cloudConfigs = mainapi:CreateCategoryList({
 	Name = 'Cloud Configs',
 	Icon = getcustomasset('badvape/assets/new/profilesicon.png'),
 	Size = UDim2.fromOffset(17, 10),
@@ -6395,16 +6399,18 @@ local cloudConfigs = mainapi:CreateCategoryList({
 	Color = Color3.fromRGB(77, 157, 214),
 	Function = function()
 		if cloudUpdating then return end
-		local enabled = cloudConfigs.ListEnabled or {}
+		local control = cloudConfigs
+		if type(control) ~= 'table' then return end
+		local enabled = control.ListEnabled or {}
 		cloudSelectedId = enabled and cloudEntries[enabled[#enabled]] and cloudEntries[enabled[#enabled]].id or nil
 		if #enabled > 1 then
 			cloudUpdating = true
 			for i = 1, #enabled - 1 do
 				local label = enabled[i]
-				local index = table.find(cloudConfigs.ListEnabled, label)
-				if index then table.remove(cloudConfigs.ListEnabled, index) end
+				local index = table.find(control.ListEnabled, label)
+				if index then table.remove(control.ListEnabled, index) end
 			end
-			cloudConfigs:ChangeValue()
+			control:ChangeValue()
 			cloudUpdating = false
 		end
 	end
