@@ -6286,17 +6286,47 @@ local function cloudRequest(method, path, body, withSession)
 	if type(krnl) == 'table' then addSender(krnl.request) end
 	if #senders == 0 then return nil, 'request unavailable' end
 	local headers = {['Accept'] = 'application/json', ['Content-Type'] = 'application/json'}
-	local hwidGetter = type(gethwid) == 'function' and gethwid or (type(get_hwid) == 'function' and get_hwid)
-	if type(hwidGetter) == 'function' then
-		local hwidOk, hwid = pcall(hwidGetter)
-		if hwidOk and hwid ~= nil and tostring(hwid) ~= '' then
-			-- Synapse-family request adapters reserve Syn-Fingerprint and reject
-			-- attempts to overwrite it.  Use the compatible alias instead; when
-			-- the adapter supplies Syn-Fingerprint itself the server will prefer
-			-- that value (the aliases must still agree).
-			headers['x-fingerprint'] = tostring(hwid)
+	-- Protected authentication binds the device under X-HWID. Reuse that
+	-- namespace here; fingerprint aliases can be reserved or auto-injected by
+	-- request adapters and would otherwise look like a different device.
+	local function cloudTryDeviceIdentity(candidate, owner)
+		if type(candidate) ~= 'function' then return nil end
+		local ok, value = pcall(candidate)
+		if (not ok or type(value) ~= 'string') and owner ~= nil then
+			ok, value = pcall(candidate, owner)
+		end
+		if not ok or type(value) ~= 'string' then return nil end
+		value = value:match('^%s*(.-)%s*$')
+		if #value < 8 or #value > 512 or value:find('[%c]') then return nil end
+		return value
+	end
+	local function cloudDeviceIdentity()
+		local environment = _G
+		if type(getgenv) == 'function' then
+			local environmentOk, candidateEnvironment = pcall(getgenv)
+			if environmentOk and type(candidateEnvironment) == 'table' then
+				environment = candidateEnvironment
+			end
+		end
+		if type(environment) ~= 'table' then environment = _G end
+		local synapse = type(environment.syn) == 'table' and environment.syn or nil
+		local globalSynapse = type(syn) == 'table' and syn or nil
+		local identity = cloudTryDeviceIdentity(environment.gethwid)
+			or cloudTryDeviceIdentity(environment.get_hwid)
+			or cloudTryDeviceIdentity(synapse and (synapse.gethwid or synapse.get_hwid), synapse)
+			or cloudTryDeviceIdentity(gethwid)
+			or cloudTryDeviceIdentity(get_hwid)
+			or cloudTryDeviceIdentity(globalSynapse and (globalSynapse.gethwid or globalSynapse.get_hwid), globalSynapse)
+		if identity then return identity end
+		local analyticsOk, analytics = pcall(function()
+			return game:GetService('RbxAnalyticsService')
+		end)
+		if analyticsOk and analytics then
+			return cloudTryDeviceIdentity(analytics.GetClientId, analytics)
 		end
 	end
+	local hwid = cloudDeviceIdentity()
+	if hwid then headers['x-hwid'] = hwid end
 	if withSession and cloudSession and cloudSession.token then
 		headers.Authorization = 'Bearer '..cloudSession.token
 	end
