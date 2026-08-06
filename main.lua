@@ -356,6 +356,19 @@ local function finishLoading()
 		end
 		if teleportCredential then
 			local encodedCredential = httpService:JSONEncode(teleportCredential)
+			-- `main` is resolved by bootstrap/init; a cached SHA is forwarded so
+			-- teleport reloads stay on the exact release that was just installed.
+			local installedRef = 'main'
+			if type(readfile) == 'function' then
+				local readOk, cachedRef = pcall(readfile, runtimeFolder..'/cache/public-release-ref.txt')
+				if readOk and type(cachedRef) == 'string'
+					and #cachedRef == 40 and cachedRef:match('^[0-9a-f]+$') then
+					installedRef = cachedRef
+				end
+			end
+			local encodedReleaseRef = installedRef ~= 'main'
+				and httpService:JSONEncode(installedRef)
+				or 'nil'
 			local encodedFolder = httpService:JSONEncode(runtimeFolder)
 			local teleportScript
 			if shared.BadVapeDeveloper then
@@ -382,7 +395,7 @@ local function finishLoading()
 					..'end\n'
 					..'local b, e = loadstring(s, "@badvape/bootstrap")\n'
 					..'if type(b) ~= "function" then error(e or "BadVape bootstrap rejected", 0) end\n'
-					..'return b('..encodedCredential..')'
+					..'return b('..encodedCredential..', '..encodedReleaseRef..')'
 			end
 			if shared.BadVapeCustomProfile then
 				teleportScript = 'shared.BadVapeCustomProfile = '

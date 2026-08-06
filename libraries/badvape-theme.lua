@@ -45,7 +45,13 @@ return function(vape, entitylib)
 	local terrainSettings = {}
 	local mapReadySince = 0
 	local rootStableSince = 0
-	local lastRootPosition
+	local waterWorlds
+	local waterTeam
+	local waterCharacter
+	-- Keep the client-side terrain operation bounded.  A 5000x5000 plane
+	-- allocates several times more voxels than a BedWars map needs and was
+	-- especially costly when the old movement invalidation refilled it.
+	local waterPlaneSize = 2048
 
 	local function getEntityLibrary()
 		return entitylib or vape.Libraries and vape.Libraries.entity
@@ -96,7 +102,9 @@ return function(vape, entitylib)
 	local function cleanup()
 		mapReadySince = 0
 		rootStableSince = 0
-		lastRootPosition = nil
+		waterWorlds = nil
+		waterTeam = nil
+		waterCharacter = nil
 		for _, object in newObjects do
 			if object and object.Parent then
 				object:Destroy()
@@ -386,24 +394,48 @@ return function(vape, entitylib)
 					-- Do not sample the lobby/skybox. BedWars can publish a Map object
 					-- before the player is teleported into the live Worlds model, so
 					-- require a non-zero team and nearby replicated map geometry for a
-					-- short stable window before creating any terrain water.
-					if lastRootPosition and (root.Position - lastRootPosition).Magnitude > 24 then
-						-- A lobby-to-match teleport (or a respawn) must invalidate the
-						-- previous water plane before another one is allowed.
+					-- short stable window before creating any terrain water.  Do not use
+					-- player movement as an invalidation signal: the old implementation
+					-- cleared and refilled a 5000x5000 terrain region every ~24 studs.
+					if not root or not root.Parent then
 						mapReadySince = 0
-						rootStableSince = 0
-						clearWaterRegion()
+						return false
 					end
-					lastRootPosition = root.Position
-					if rootStableSince == 0 then rootStableSince = tick() end
 					local mapRoot = workspace:FindFirstChild('Map')
 					local worlds = mapRoot and mapRoot:FindFirstChild('Worlds')
 					local team = localPlayer:GetAttribute('Team')
 					if not worlds or #worlds:GetChildren() == 0 or team == nil
-						or team == 0 or team == '0' or team == '' or not root then
+						or team == 0 or team == '0' or team == '' then
+						if waterRegion then clearWaterRegion() end
+						waterWorlds = nil
+						waterTeam = nil
+						waterCharacter = nil
 						mapReadySince = 0
+						rootStableSince = 0
 						return false
 					end
+
+					-- A new Worlds model, team, or character represents a real map
+					-- transition.  Only those transitions are allowed to invalidate the
+					-- water plane; walking, jumping, and ordinary knockback are not.
+					local character = root.Parent
+					if waterWorlds ~= worlds or waterTeam ~= team or waterCharacter ~= character then
+						if waterRegion then
+							clearWaterRegion()
+						end
+						waterWorlds = worlds
+						waterTeam = team
+						waterCharacter = character
+						mapReadySince = 0
+						rootStableSince = tick()
+					end
+
+					-- Once the first plane is installed, the map has already been
+					-- validated.  Avoid rescanning every tagged block on a timer.
+					if waterRegion then
+						return true
+					end
+					if rootStableSince == 0 then rootStableSince = tick() end
 					local nearby = false
 					for _, block in storeBlocks do
 						if block and block.Parent and block:IsA('BasePart')
@@ -423,8 +455,8 @@ return function(vape, entitylib)
 					return tick() - mapReadySince >= 1 and tick() - rootStableSince >= 0.75
 				end
 
-				local function findSafeWaterY(root)
-					if not root or not mapReady(root) then return end
+				local function findSafeWaterY(root, ready)
+					if not root or (not ready and not mapReady(root)) then return end
 					local rootPosition = root.Position
 					local mapRoot = workspace:FindFirstChild('Map')
 					local worlds = mapRoot and mapRoot:FindFirstChild('Worlds')
@@ -458,22 +490,24 @@ return function(vape, entitylib)
 				local function fillSafeWater(root, waterY)
 					local terrain = workspace:FindFirstChildOfClass('Terrain')
 					if not terrain or not root or not waterY then return end
-					clearWaterRegion()
 					if waterY >= root.Position.Y - 16 then return end
 					local region = {
 						CFrame = CFrame.new(root.Position.X, waterY - 2, root.Position.Z),
-						Size = Vector3.new(5000, 4, 5000),
-						TopY = waterY
+						Size = Vector3.new(waterPlaneSize, 4, waterPlaneSize),
+						TopY = waterY,
+						Worlds = waterWorlds,
+						Team = waterTeam,
+						Character = waterCharacter,
 					}
-					pcall(function()
+					local ok = pcall(function()
 						terrain:FillBlock(region.CFrame, region.Size, Enum.Material.Water)
 						terrain.WaterColor = Color3.fromRGB(0, 50, 60)
 						terrain.WaterReflectance = 0.7
 						terrain.WaterTransparency = 0.25
 						terrain.WaterWaveSize = 0.13
 						terrain.WaterWaveSpeed = 8
-						waterRegion = region
 					end)
+					if ok then waterRegion = region end
 				end
 
 				cancelWaterTask()
@@ -481,15 +515,16 @@ return function(vape, entitylib)
 				waterTask = task.spawn(function()
 					while Theme.Enabled and generation == waterGeneration do
 						local root = getRoot()
-						local waterY = findSafeWaterY(root)
-						if root and waterY then
-							local currentY = waterRegion and (waterRegion.TopY or waterRegion.CFrame.Position.Y)
-							if not currentY or math.abs(currentY - waterY) > 2
-								or currentY >= root.Position.Y - 16 then
-								fillSafeWater(root, waterY)
-							end
+						local ready = root and mapReady(root)
+						-- The water plane is a visual backdrop, not a player-following
+						-- object.  Never clear/refill it because the player walked outside
+						-- its bounds: doing so turns ordinary movement into a large terrain
+						-- allocation and was the source of the Realistic-mode hitch/crash.
+						if root and ready and not waterRegion then
+							local waterY = findSafeWaterY(root, true)
+							if waterY then fillSafeWater(root, waterY) end
 						end
-						task.wait(waterRegion and 1 or 0.25)
+						task.wait(waterRegion and 2 or 0.25)
 					end
 				end)
 
@@ -503,8 +538,10 @@ return function(vape, entitylib)
 					if not Theme.Enabled then return end
 					mapReadySince = 0
 					rootStableSince = 0
-					lastRootPosition = nil
-					clearWaterRegion()
+					-- Leave the existing plane in place during a respawn.  The next
+					-- valid root is tracked as a character transition by mapReady and
+					-- clears it once, instead of doing duplicate 5000x5000 fills here.
+					waterCharacter = nil
 					local humanoid = character:WaitForChild('Humanoid', 10)
 					if humanoid then
 						humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)

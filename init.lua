@@ -1,7 +1,7 @@
 -- BadVape public runtime installer.
 -- The manifest is an explicit allowlist; private game source is never part of it.
 
-local forwardedLicense, installerTransport = ...
+local forwardedLicense, installerTransport, requestedReleaseRef = ...
 local httpService = game:GetService('HttpService')
 
 local owner = '4fundsagent-source'
@@ -9,6 +9,18 @@ local repo = 'badvape-v2'
 local branch = 'main'
 local folder = shared.BadVapeFolder or 'badvape'
 local diagnosticsPath = folder..'/badvape-debug.txt'
+
+-- Teleport reloads may pin the exact immutable release that was already
+-- installed.  This is validated before any network selection and takes
+-- precedence over branch/API resolution without weakening normal startup.
+if requestedReleaseRef ~= nil then
+	if type(requestedReleaseRef) ~= 'string'
+		or not requestedReleaseRef:match('^[0-9a-f]+$')
+		or #requestedReleaseRef ~= 40 then
+		error('invalid BadVape release ref', 0)
+	end
+	branch = requestedReleaseRef
+end
 
 -- Keep one self-contained report in the workspace. It deliberately excludes
 -- credentials, device identifiers, auth tokens, request headers and contents.

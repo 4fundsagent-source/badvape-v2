@@ -107,6 +107,36 @@ local function addCorner(parent, radius)
 	return corner
 end
 
+local function cleanupHandle(handle)
+	if handle == nil then
+		return
+	end
+	if typeof(handle) == 'Instance' then
+		pcall(function()
+			handle:ClearAllChildren()
+			handle:Destroy()
+		end)
+		return
+	end
+	local handleType = type(handle)
+	if handleType == 'function' then
+		pcall(handle)
+		return
+	elseif handleType == 'thread' then
+		pcall(task.cancel, handle)
+		return
+	end
+	for _, methodName in {'Disconnect', 'Clean', 'Cleanup', 'Destroy', 'Remove', 'Cancel'} do
+		local ok, method = pcall(function()
+			return handle[methodName]
+		end)
+		if ok and type(method) == 'function' then
+			pcall(method, handle)
+			return
+		end
+	end
+end
+
 local function addMaid(object)
 	object.Connections = {}
 	function object:Clean(callback)
@@ -122,7 +152,11 @@ local function addMaid(object)
 				Disconnect = callback
 			})
 		else
-			table.insert(self.Connections, callback)
+			table.insert(self.Connections, {
+				Disconnect = function()
+					cleanupHandle(callback)
+				end
+			})
 		end
 	end
 end
@@ -2075,7 +2109,7 @@ function mainapi:CreateCategory(categorysettings)
 			modulebutton.BackgroundTransparency = self.Enabled and 0 or 0.06
 			if not self.Enabled then
 				for _, v in self.Connections do
-					v:Disconnect()
+					cleanupHandle(v)
 				end
 				table.clear(self.Connections)
 			end
@@ -2396,7 +2430,7 @@ function mainapi:CreateLegit(categorysettings)
 			modulebutton.BackgroundTransparency = moduleapi.Enabled and 0 or 0.06
 			if not moduleapi.Enabled then
 				for _, v in moduleapi.Connections do
-					v:Disconnect()
+					cleanupHandle(v)
 				end
 				table.clear(moduleapi.Connections)
 			end
@@ -2516,7 +2550,7 @@ function mainapi:CreateOverlay(categorysettings)
 				window.Visible = callback and (clickgui.Visible or categoryapi.Pinned)
 				if not callback then
 					for _, v in categoryapi.Connections do
-						v:Disconnect()
+						cleanupHandle(v)
 					end
 					table.clear(categoryapi.Connections)
 				end
@@ -3318,9 +3352,7 @@ function mainapi:Remove(obj)
 		local connections = rawget(newobj, 'Connections')
 		if type(connections) == 'table' then
 			for _, connection in connections do
-				pcall(function()
-					connection:Disconnect()
-				end)
+				cleanupHandle(connection)
 			end
 			table.clear(connections)
 		end
@@ -3417,9 +3449,7 @@ function mainapi:Uninject()
 		end
 	end
 	for _, v in mainapi.Connections do
-		pcall(function()
-			v:Disconnect()
-		end)
+		cleanupHandle(v)
 	end
 	if mainapi.ThreadFix then
 		setthreadidentity(8)

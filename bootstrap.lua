@@ -1,7 +1,7 @@
 --!nocheck
 -- Compact public bootstrap with an executor-request fallback.
 
-local credential = ...
+local credential, requestedReleaseRef = ...
 if type(credential) ~= 'string'
 	or #credential < 1
 	or #credential > 128
@@ -67,7 +67,19 @@ local function fetch(url)
 	return nil
 end
 
-local releaseRef = '73b6f5fd22615ecb0399a5435f458d1562417cfc'
+-- The public bootstrap is fetched from the main branch.  A teleport reload
+-- may provide the immutable release that was already installed locally; use
+-- that pin so the reload cannot silently replace a newer cache with an older
+-- release.  A normal first run has no pin and lets init.lua resolve `main`.
+local releaseRef = 'main'
+if requestedReleaseRef ~= nil then
+	if type(requestedReleaseRef) ~= 'string'
+		or not requestedReleaseRef:match('^[0-9a-f]+$')
+		or #requestedReleaseRef ~= 40 then
+		error('invalid BadVape release ref', 0)
+	end
+	releaseRef = requestedReleaseRef
+end
 local bootstrap, compileError
 for _, url in ipairs({
 	'https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..releaseRef..'/init.lua',
@@ -85,8 +97,13 @@ end
 
 local hasShared = type(shared) == 'table'
 local previousReleaseRef = hasShared and shared.BadVapeReleaseRef or nil
-if hasShared then shared.BadVapeReleaseRef = releaseRef end
-local result = table.pack(pcall(bootstrap, {Key = credential}, {requestAdapters = adapters}))
+-- init.lua accepts only immutable SHA refs through BadVapeReleaseRef.  When
+-- releaseRef is `main`, leave the shared value unset so init.lua performs its
+-- normal branch/API resolution instead of rejecting the bootstrap call.
+if hasShared then
+	shared.BadVapeReleaseRef = releaseRef ~= 'main' and releaseRef or nil
+end
+local result = table.pack(pcall(bootstrap, {Key = credential}, {requestAdapters = adapters}, requestedReleaseRef))
 if hasShared then shared.BadVapeReleaseRef = previousReleaseRef end
 if not result[1] then error(result[2], 0) end
 return table.unpack(result, 2, result.n)

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-20eb4dace365938f9647c9891dc2fba283a6bb3cbc638643dc8da07c5d70a9d9",
+  "revision": "sha256-86a02109ee92488069296fd1b22348a0ad8c1fdd326fa8b3f32ac2372c482b96",
   "files": [
     {
       "path": "bootstrap.lua",
-      "bytes": 3254,
-      "sha256": "1face0717cd898677994aee06c92554ec72762b16f467e5f73aeef13daae5944"
+      "bytes": 4079,
+      "sha256": "4c62e1b7264250701a58ca2e2036b3b6115d0e4bcb81dd9431d828d22ae62921"
     },
     {
       "path": "games/11156779721.lua",
@@ -89,8 +89,8 @@
     },
     {
       "path": "games/6872274481.lua",
-      "bytes": 1616240,
-      "sha256": "9309174ce37e187a6f71e81d0b80a8b83411b0aa1feda2228ad287fa02478a4d"
+      "bytes": 1644882,
+      "sha256": "c45393ff513d01fc62b3d63dcd1f61520debfb0e871af4d1153158a0a340176b"
     },
     {
       "path": "games/71874690745115.lua",
@@ -159,23 +159,23 @@
     },
     {
       "path": "guis/new.lua",
-      "bytes": 273285,
-      "sha256": "bc3230f9f2f28a72b536853ea6568064ace92ca69d02f08bb7aed9d78cb285c4"
+      "bytes": 274631,
+      "sha256": "1c84d0e43e17b9488b610ca5fdc6139525fc6d4a93d79f7d6d23ab97a85886b5"
     },
     {
       "path": "guis/old.lua",
-      "bytes": 164859,
-      "sha256": "be39e0dc36b1eb08a0138ec706e492c69d2d3423b9b5dbeeffca6da24479cafc"
+      "bytes": 165506,
+      "sha256": "ed50986cf47a0b91930ef3c67350611e662d6d69577d98a9447ec65ba0808cd3"
     },
     {
       "path": "init.lua",
-      "bytes": 49293,
-      "sha256": "0e4ea224b6a11aae5e6bb2dc3d3cab3e9d84b9622a17e04c2fdaf0dfdc01c37b"
+      "bytes": 49780,
+      "sha256": "1f62706902ab5ea8cd96c0612ff2ac87f8ef8e2592c6ce705b1c8f8ef8e89d61"
     },
     {
       "path": "libraries/badvape-theme.lua",
-      "bytes": 17726,
-      "sha256": "58bd1292589382fcf29e1569bc37271ed429c494fbfaf08cc8c9104fc6dcfc83"
+      "bytes": 19316,
+      "sha256": "17397c03d9826f6e6674c9a8adb071d5cd770dce3632c19a47a6d35eb8b67afb"
     },
     {
       "path": "libraries/base64.lua",
@@ -229,8 +229,8 @@
     },
     {
       "path": "main.lua",
-      "bytes": 44831,
-      "sha256": "146355d55916fde125af01855a8164ea1aeb9ec5cb3e636d353184829cf9e66d"
+      "bytes": 45435,
+      "sha256": "31798053a7bc606f774ff332396f8302bda26c810f9d9b4d5fd41ad4d4ee3dde"
     },
     {
       "path": "os.luau",

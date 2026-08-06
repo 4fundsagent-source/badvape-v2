@@ -195,6 +195,47 @@ local function addCloseButton(parent, offset)
 	return close
 end
 
+-- Cleanup entries are intentionally permissive: modules may register
+-- RBXScriptConnections, Instances, callbacks, task threads, or library-owned
+-- handles.  Treating every entry as an RBXScriptConnection makes toggling a
+-- module fail as soon as one of the latter is registered.
+local function cleanupHandle(handle)
+	if handle == nil then
+		return
+	end
+
+	if typeof(handle) == 'Instance' then
+		pcall(function()
+			handle:ClearAllChildren()
+			handle:Destroy()
+		end)
+		return
+	end
+
+	local handleType = type(handle)
+	if handleType == 'function' then
+		pcall(handle)
+		return
+	elseif handleType == 'thread' then
+		pcall(task.cancel, handle)
+		return
+	end
+
+	-- The common case is Disconnect, but custom libraries use names such as
+	-- Clean, Cleanup, Destroy, Remove, or Cancel for their disposable handles.
+	-- Access and invocation are protected because userdata/table metamethods can
+	-- reject an unknown member.
+	for _, methodName in {'Disconnect', 'Clean', 'Cleanup', 'Destroy', 'Remove', 'Cancel'} do
+		local ok, method = pcall(function()
+			return handle[methodName]
+		end)
+		if ok and type(method) == 'function' then
+			pcall(method, handle)
+			return
+		end
+	end
+end
+
 local function addMaid(object)
 	object.Connections = {}
 	function object:Clean(callback)
@@ -216,7 +257,13 @@ local function addMaid(object)
 				end
 			})
 		else
-			table.insert(self.Connections, callback)
+			-- Keep the connection list homogeneous.  A no-op wrapper is preferable
+			-- to retaining an arbitrary table and later calling :Disconnect() on it.
+			table.insert(self.Connections, {
+				Disconnect = function()
+					cleanupHandle(callback)
+				end
+			})
 		end
 	end
 end
@@ -3911,7 +3958,7 @@ function mainapi:CreateCategory(categorysettings)
 			bindtext.TextColor3 = color.Dark(uipallet.Text, 0.43)
 			if not self.Enabled then
 				for _, v in self.Connections do
-					v:Disconnect()
+					cleanupHandle(v)
 				end
 				table.clear(self.Connections)
 			end
@@ -4124,7 +4171,7 @@ function mainapi:CreateOverlay(categorysettings)
 				window.Visible = callback and (clickgui.Visible or categoryapi.Pinned)
 				if not callback then
 					for _, v in categoryapi.Connections do
-						v:Disconnect()
+						cleanupHandle(v)
 					end
 					table.clear(categoryapi.Connections)
 				end
@@ -5300,7 +5347,7 @@ function mainapi:CreateLegit()
 			})
 			if not moduleapi.Enabled then
 				for _, v in moduleapi.Connections do
-					v:Disconnect()
+					cleanupHandle(v)
 				end
 				table.clear(moduleapi.Connections)
 			end
@@ -5818,9 +5865,7 @@ function mainapi:Remove(obj)
 		local connections = rawget(newobj, 'Connections')
 		if type(connections) == 'table' then
 			for _, connection in connections do
-				pcall(function()
-					connection:Disconnect()
-				end)
+				cleanupHandle(connection)
 			end
 			table.clear(connections)
 		end
@@ -5915,9 +5960,7 @@ function mainapi:Uninject()
 		end
 	end
 	for _, v in mainapi.Connections do
-		pcall(function()
-			v:Disconnect()
-		end)
+		cleanupHandle(v)
 	end
 	if mainapi.ThreadFix then
 		setthreadidentity(8)
