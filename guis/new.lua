@@ -4382,13 +4382,16 @@ function mainapi:CreateCategoryList(categorysettings)
 	childrentwo.BackgroundTransparency = 1
 	childrentwo.BackgroundColor3 = color.Dark(uipallet.Main, 0.02)
 	childrentwo.Visible = false
+	childrentwo.Size = UDim2.fromOffset(220, 0)
 	childrentwo.Parent = children
+	local optionschildren = categorysettings.InlineOptions and children or childrentwo
 	local settings = Instance.new('ImageButton')
 	settings.Name = 'Settings'
 	settings.Size = UDim2.fromOffset(16, 16)
 	settings.Position = UDim2.new(1, -52, 0, 13)
 	settings.BackgroundTransparency = 1
 	settings.AutoButtonColor = false
+	settings.Visible = not categorysettings.InlineOptions
 	settings.Image = getcustomasset('badvape/assets/new/customsettings.png')
 	settings.ImageColor3 = color.Dark(uipallet.Text, 0.43)
 	settings.Parent = window
@@ -4774,7 +4777,7 @@ function mainapi:CreateCategoryList(categorysettings)
 
 	for i, v in components do
 		categoryapi['Create'..i] = function(self, optionsettings)
-			return v(optionsettings, childrentwo, categoryapi)
+			return v(optionsettings, optionschildren, categoryapi)
 		end
 	end
 
@@ -4828,6 +4831,7 @@ function mainapi:CreateCategoryList(categorysettings)
 		settings.ImageColor3 = color.Light(uipallet.Main, 0.37)
 	end)
 	settings.MouseButton1Click:Connect(function()
+		if categorysettings.InlineOptions then return end
 		childrentwo.Visible = not childrentwo.Visible
 	end)
 	window.InputBegan:Connect(function(inputObj)
@@ -6426,6 +6430,7 @@ cloudConfigs = mainapi:CreateCategoryList({
 	Size = UDim2.fromOffset(17, 10),
 	Position = UDim2.fromOffset(12, 16),
 	Placeholder = 'Choose config',
+	InlineOptions = true,
 	Color = Color3.fromRGB(77, 157, 214),
 	Function = function()
 		if cloudUpdating then return end
