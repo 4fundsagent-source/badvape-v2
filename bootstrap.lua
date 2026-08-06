@@ -57,7 +57,7 @@ local function fetch(url)
 			and tonumber(response.StatusCode or response.Status) or nil
 		local body = ok and type(response) == 'table'
 			and (response.Body or response.body) or nil
-		if (status == 200 or status == 201)
+		if (status == nil or status == 0 or status == 200 or status == 201)
 			and type(body) == 'string'
 			and body ~= ''
 			and body ~= '404: Not Found' then
