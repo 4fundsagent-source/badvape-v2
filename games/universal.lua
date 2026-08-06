@@ -4705,7 +4705,9 @@ end)
 
 run(function()
     local Swim
-    local terrain = cloneref(workspace:FindFirstChildWhichIsA('Terrain'))
+    -- Terrain may not exist while the game is loading; cloneref rejects nil.
+    local terrainInstance = workspace:FindFirstChildWhichIsA('Terrain')
+    local terrain = terrainInstance and cloneref(terrainInstance) or nil
     local lastpos = Region3.new(Vector3.zero, Vector3.zero)
 
     Swim = vape.Categories.Blatant:CreateModule({
