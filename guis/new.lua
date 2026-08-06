@@ -4418,6 +4418,10 @@ function mainapi:CreateCategoryList(categorysettings)
 	children.Name = 'Children'
 	children.Size = UDim2.new(1, 0, 1, -45)
 	children.Position = UDim2.fromOffset(0, 45)
+	-- Keep the component host themed even when it is transparent.  Inline
+	-- options use this color as their row base; leaving the Roblox default
+	-- (white/gray) here makes those rows render as unrelated gray bands.
+	children.BackgroundColor3 = color.Dark(uipallet.Main, 0.02)
 	children.BackgroundTransparency = 1
 	children.BorderSizePixel = 0
 	children.Visible = false
@@ -6474,7 +6478,6 @@ cloudConfigs = mainapi:CreateCategoryList({
 	Position = UDim2.fromOffset(12, 16),
 	Placeholder = 'Choose config',
 	InlineOptions = true,
-	Color = Color3.fromRGB(77, 157, 214),
 	Function = function()
 		if cloudUpdating then return end
 		local control = cloudConfigs
@@ -6497,34 +6500,28 @@ cloudConfigs = mainapi:CreateCategoryList({
 local cloudSearch = cloudConfigs:CreateTextBox({
 	Name = 'Search',
 	Placeholder = 'name or description',
-	Darker = true,
 	Function = function() cloudPage = 1 end
 })
 local cloudSort = cloudConfigs:CreateDropdown({
 	Name = 'Sort',
 	List = {'recent', 'rating', 'installs', 'name'},
-	Darker = true,
 	Function = function() cloudPage = 1 end
 })
 local cloudUploadName = cloudConfigs:CreateTextBox({
 	Name = 'Upload name',
-	Placeholder = 'name shown to others',
-	Darker = true
+	Placeholder = 'name shown to others'
 })
 local cloudDescription = cloudConfigs:CreateTextBox({
 	Name = 'Description',
-	Placeholder = 'short description',
-	Darker = true
+	Placeholder = 'short description'
 })
 local cloudInstallName = cloudConfigs:CreateTextBox({
 	Name = 'Install as',
-	Placeholder = 'local profile name',
-	Darker = true
+	Placeholder = 'local profile name'
 })
 local cloudRating = cloudConfigs:CreateDropdown({
 	Name = 'Rating',
-	List = {'1', '2', '3', '4', '5'},
-	Darker = true
+	List = {'1', '2', '3', '4', '5'}
 })
 
 local function cloudNotify(text, kind)
@@ -6624,8 +6621,7 @@ cloudConfigs:CreateButton({
 		if cloudPage <= 1 then return cloudNotify('Already on the first page.', 'info') end
 		cloudPage -= 1
 		cloudRefresh()
-	end,
-	Darker = true
+	end
 })
 cloudConfigs:CreateButton({
 	Name = 'Next page',
@@ -6633,14 +6629,12 @@ cloudConfigs:CreateButton({
 		if cloudPage * cloudPageSize >= cloudTotal then return cloudNotify('Already on the last page.', 'info') end
 		cloudPage += 1
 		cloudRefresh()
-	end,
-	Darker = true
+	end
 })
 
 cloudConfigs:CreateButton({
 	Name = 'Refresh',
-	Function = cloudRefresh,
-	Darker = true
+	Function = cloudRefresh
 })
 cloudConfigs:CreateButton({
 Name = 'Upload current',
@@ -6667,8 +6661,7 @@ Name = 'Upload current',
 			cloudNotify('Uploaded '..name..'.', 'info')
 			cloudRefresh()
 		end)
-	end,
-	Darker = true
+	end
 })
 cloudConfigs:CreateButton({
 Name = 'Install selected',
@@ -6756,8 +6749,7 @@ Name = 'Install selected',
 			cloudNotify('Installed as '..installName..'. You can now rate it.', 'info')
 			cloudRefresh()
 		end)
-	end,
-	Darker = true
+	end
 })
 cloudConfigs:CreateButton({
 Name = 'Rate selected',
@@ -6775,8 +6767,7 @@ Name = 'Rate selected',
 			cloudNotify('Rating saved.', 'info')
 			cloudRefresh()
 		end)
-	end,
-	Darker = true
+	end
 })
 
 --[[
