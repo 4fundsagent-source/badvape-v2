@@ -56,7 +56,15 @@ local httpService = cloneref(game:GetService('HttpService'))
 
 local function safeIsFile(path)
 	if isfile then
-		return isfile(path)
+		local ok, result = pcall(isfile, path)
+		if ok and result then
+			return true
+		end
+
+		-- Some executors briefly cache `isfile` after a write. Reading the file
+		-- directly avoids rejecting an entrypoint that was installed successfully.
+		local readOk, contents = pcall(readfile, path)
+		return readOk and type(contents) == 'string' and contents ~= ''
 	end
 
 	local success, result = pcall(function()
@@ -452,11 +460,22 @@ if not localPlayer then
 end
 
 local mainPath = folder..'/main.lua'
-if not safeIsFile(mainPath) then
+local mainSource
+for attempt = 1, 3 do
+	local readOk, contents = pcall(readfile, mainPath)
+	if readOk and type(contents) == 'string' and contents ~= '' then
+		mainSource = contents
+		break
+	end
+	if attempt < 3 and task and task.wait then
+		task.wait()
+	end
+end
+if not mainSource then
 	restoreRuntimeEnvironment()
 	error('Missing local BadVape entrypoint', 0)
 end
-local mainChunk, mainLoadError = loadstring(readfile(mainPath), 'badvape/main.lua')
+local mainChunk, mainLoadError = loadstring(mainSource, 'badvape/main.lua')
 if not mainChunk then
 	restoreRuntimeEnvironment()
 	error('BadVape entrypoint rejected: '..tostring(mainLoadError), 0)

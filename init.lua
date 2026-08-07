@@ -264,7 +264,16 @@ end
 
 local function safeIsFile(path)
 	if isfile then
-		return isfile(path)
+		local ok, result = pcall(isfile, path)
+		if ok and result then
+			return true
+		end
+
+		-- A few executors cache `isfile` results briefly after a write.  Read the
+		-- file as a fallback so a successful atomic install is not reported as a
+		-- missing runtime entrypoint on the same execution.
+		local readOk, contents = pcall(readfile, path)
+		return readOk and type(contents) == 'string' and contents ~= ''
 	end
 	local ok, value = pcall(readfile, path)
 	return ok and type(value) == 'string'
