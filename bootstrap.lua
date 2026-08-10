@@ -26,6 +26,71 @@ if type(getgenv) == 'function' then
 end
 addEnvironment(type(_G) == 'table' and _G or nil)
 
+-- Queue-on-teleport can execute before the destination place has mounted its
+-- client tree. Do not fetch or run the installer until Roblox has finished
+-- loading, the local player's basic script containers exist, and FloodCraft's
+-- own client bootstrap has published its readiness marker.
+local floodCraftPlaces = {
+	[6872265039] = true,
+	[6872274481] = true,
+	[8444591321] = true,
+	[8560631822] = true,
+}
+
+local function floodCraftClientReady()
+	local placeId = tonumber(game.PlaceId)
+	if not floodCraftPlaces[placeId] then
+		return true
+	end
+
+	local workspaceService = game:GetService('Workspace')
+	local marker = workspaceService:FindFirstChild('ClientFlameReady')
+	return marker ~= nil
+		and (type(marker.IsA) ~= 'function' or marker:IsA('BoolValue'))
+		and marker.Value == true
+end
+
+local function waitForDestinationReady()
+	local apiAvailable = false
+	pcall(function()
+		apiAvailable = type(game) == 'userdata' or type(game) == 'table'
+			and type(game.IsLoaded) == 'function'
+			and type(game.GetService) == 'function'
+	end)
+	if not apiAvailable then
+		-- Keep the standalone bootstrap harness compatible; Roblox always exposes
+		-- these methods, so production execution still takes the strict path.
+		return true
+	end
+
+	local clock = type(os) == 'table' and type(os.clock) == 'function'
+		and os.clock or tick
+	local deadline = clock() + 45
+	while clock() < deadline do
+		local ready = false
+		pcall(function()
+			local players = game:GetService('Players')
+			local localPlayer = players.LocalPlayer
+			ready = game:IsLoaded()
+				and localPlayer ~= nil
+				and localPlayer:FindFirstChild('PlayerGui') ~= nil
+				and localPlayer:FindFirstChild('PlayerScripts') ~= nil
+				and floodCraftClientReady()
+		end)
+		if ready then return true end
+		if type(task) == 'table' and type(task.wait) == 'function' then
+			task.wait()
+		else
+			break
+		end
+	end
+	return false
+end
+
+if not waitForDestinationReady() then
+	error('BadVape destination place did not finish loading', 0)
+end
+
 local adapters, seenAdapters = {}, {}
 local function addAdapter(candidate)
 	if type(candidate) == 'function' and not seenAdapters[candidate] then
@@ -53,10 +118,13 @@ local function fetch(url)
 	end
 	for _, adapter in ipairs(adapters) do
 		local ok, response = pcall(adapter, {Url = url, Method = 'GET'})
-		local status = ok and type(response) == 'table'
-			and tonumber(response.StatusCode or response.Status) or nil
-		local body = ok and type(response) == 'table'
-			and (response.Body or response.body) or nil
+		local responseType = ok and type(response) or nil
+		local status = responseType == 'string' and 200
+			or (responseType == 'table'
+				and tonumber(response.StatusCode or response.Status
+					or response.status_code or response.status) or nil)
+		local body = responseType == 'string' and response
+			or (responseType == 'table' and (response.Body or response.body) or nil)
 		if (status == nil or status == 0 or status == 200 or status == 201)
 			and type(body) == 'string'
 			and body ~= ''

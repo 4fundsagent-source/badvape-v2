@@ -4,6 +4,66 @@
 local forwardedLicense, installerTransport, requestedReleaseRef = ...
 local httpService = game:GetService('HttpService')
 
+-- The queued teleport entrypoint may run while the destination is still
+-- mounting.  Keep this guard here as a second boundary for cached/direct
+-- installer calls that do not pass through bootstrap.lua.
+local floodCraftPlaces = {
+	[6872265039] = true,
+	[6872274481] = true,
+	[8444591321] = true,
+	[8560631822] = true,
+}
+
+local function floodCraftClientReady()
+	local placeId = tonumber(game.PlaceId)
+	if not floodCraftPlaces[placeId] then
+		return true
+	end
+
+	local workspaceService = game:GetService('Workspace')
+	local marker = workspaceService:FindFirstChild('ClientFlameReady')
+	return marker ~= nil
+		and (type(marker.IsA) ~= 'function' or marker:IsA('BoolValue'))
+		and marker.Value == true
+end
+
+local function waitForDestinationReady()
+	local apiAvailable = false
+	pcall(function()
+		apiAvailable = type(game) == 'userdata' or type(game) == 'table'
+			and type(game.IsLoaded) == 'function'
+			and type(game.GetService) == 'function'
+	end)
+	if not apiAvailable then return true end
+
+	local clock = type(os) == 'table' and type(os.clock) == 'function'
+		and os.clock or tick
+	local deadline = clock() + 45
+	while clock() < deadline do
+		local ready = false
+		pcall(function()
+			local players = game:GetService('Players')
+			local localPlayer = players.LocalPlayer
+			ready = game:IsLoaded()
+				and localPlayer ~= nil
+				and localPlayer:FindFirstChild('PlayerGui') ~= nil
+				and localPlayer:FindFirstChild('PlayerScripts') ~= nil
+				and floodCraftClientReady()
+		end)
+		if ready then return true end
+		if type(task) == 'table' and type(task.wait) == 'function' then
+			task.wait()
+		else
+			break
+		end
+	end
+	return false
+end
+
+if not waitForDestinationReady() then
+	error('BadVape destination place did not finish loading', 0)
+end
+
 local owner = '4fundsagent-source'
 local repo = 'badvape-v2'
 local branch = 'main'
@@ -29,6 +89,34 @@ local diagnosticLines = {
 	'privacy=credentials, device identifiers, auth tokens, headers and file contents are not recorded',
 }
 local diagnosticStarted = type(os) == 'table' and type(os.clock) == 'function' and os.clock() or 0
+local diagnosticDirty = true
+local diagnosticLastFlush = diagnosticStarted
+local diagnosticFlushCount = 0
+local diagnosticFlushEvery = 12
+local diagnosticFlushInterval = 0.75
+local diagnosticCriticalEvents = {
+	installer_start = true,
+	installer_invalid_release_ref = true,
+	pinned_cache_mismatch = true,
+	manifest_invalid = true,
+	install_download_set_failed = true,
+	install_parent_failed = true,
+	install_write_failed = true,
+	install_verify_failed = true,
+	profile_update_state_write_failed = true,
+	installer_manifest_unavailable = true,
+	installer_cache_fallback = true,
+	installer_commit_deferred = true,
+	installer_committed = true,
+	runtime_missing = true,
+	runtime_read_failed = true,
+	runtime_compile_start = true,
+	runtime_compile_failed = true,
+	runtime_compile_complete = true,
+	runtime_execution_start = true,
+	runtime_execution_failed = true,
+	runtime_execution_complete = true,
+}
 local forwardedSecret = type(forwardedLicense) == 'table' and forwardedLicense.Key
 forwardedSecret = type(forwardedSecret) == 'string' and forwardedSecret or nil
 local forwardedLuaProtMarker, forwardedLuaProtSecret
@@ -76,11 +164,16 @@ local function diagnosticValue(value)
 	return value:sub(1, 2000)
 end
 
-local function flushDiagnostics()
+local function flushDiagnostics(force)
+	if not force and not diagnosticDirty then return true end
 	pcall(function()
 		if not isfolder(folder) then makefolder(folder) end
 		writefile(diagnosticsPath, table.concat(diagnosticLines, '\n')..'\n')
 	end)
+	diagnosticDirty = false
+	diagnosticLastFlush = type(os) == 'table' and type(os.clock) == 'function' and os.clock() or diagnosticLastFlush
+	diagnosticFlushCount += 1
+	return true
 end
 
 local diagnostics = {path = diagnosticsPath}
@@ -97,11 +190,21 @@ function diagnostics.record(event, fields)
 		table.insert(parts, diagnosticValue(key)..'='..diagnosticValue(fields[key]))
 	end
 	table.insert(diagnosticLines, table.concat(parts, '\t'))
-	flushDiagnostics()
+	diagnosticDirty = true
+	local now = type(os) == 'table' and type(os.clock) == 'function' and os.clock() or diagnosticLastFlush
+	local eventCount = #diagnosticLines - 2
+	if diagnosticCriticalEvents[event]
+		or eventCount % diagnosticFlushEvery == 0
+		or now - diagnosticLastFlush >= diagnosticFlushInterval then
+		flushDiagnostics(true)
+	end
+end
+diagnostics.flush = function()
+	return flushDiagnostics(true)
 end
 diagnostics.redact = diagnosticValue
 shared.BadVapeDiagnostics = diagnostics
-flushDiagnostics()
+flushDiagnostics(true)
 
 local pinnedReleaseRef
 if shared.BadVapeReleaseRef ~= nil then
@@ -124,6 +227,10 @@ local releaseRefPath = folder..'/cache/public-release-ref.txt'
 local runtimeRepairPath = folder..'/cache/runtime-repair-20260716-v1.txt'
 
 shared.BadVapeFolder = folder
+-- This flag is scoped to the current installer execution.  The game module
+-- uses it only to yield during a cold/update registration pass; cached runs
+-- stay on the fast path.
+shared.BadVapeColdStart = false
 
 local function identifyExecutor()
 	local candidates = {identifyexecutor, getexecutorname}
@@ -247,10 +354,13 @@ local function compatibleHttpGet(url, cache)
 	local lastError = ok and 'empty response' or body
 	for _, adapter in ipairs(httpAdapters) do
 		local requestOk, response = pcall(adapter, {Url = url, Method = 'GET'})
-		local status = requestOk and type(response) == 'table'
-			and tonumber(response.StatusCode or response.Status) or nil
-		local responseBody = requestOk and type(response) == 'table'
-			and (response.Body or response.body) or nil
+		local responseType = requestOk and type(response) or nil
+		local status = responseType == 'string' and 200
+			or (responseType == 'table'
+				and tonumber(response.StatusCode or response.Status
+					or response.status_code or response.status) or nil)
+		local responseBody = responseType == 'string' and response
+			or (responseType == 'table' and (response.Body or response.body) or nil)
 		if (status == nil or status == 0 or status == 200 or status == 201)
 			and type(responseBody) == 'string'
 			and responseBody ~= ''
@@ -295,6 +405,11 @@ local function ensureParent(path)
 end
 
 local function runCachedRuntime()
+	-- Persist the complete installer state once before handing control to the
+	-- runtime. Diagnostics are buffered during the file plan to avoid rewriting
+	-- the whole report for every cache/hash event, but a runtime failure must
+	-- still leave an immediately usable report on disk.
+	flushDiagnostics(true)
 	local osPath = folder..'/os.luau'
 	if not safeIsFile(osPath) then
 		diagnostics.record('runtime_missing', {path = osPath})
@@ -330,9 +445,11 @@ local function runCachedRuntime()
 	end, traceError))
 	if not runtimeResult[1] then
 		diagnostics.record('runtime_execution_failed', {error = runtimeResult[2], path = osPath})
+		flushDiagnostics(true)
 		error(runtimeResult[2], 0)
 	end
 	diagnostics.record('runtime_execution_complete', {path = osPath, resultType = typeof(runtimeResult[2])})
+	flushDiagnostics(true)
 	return table.unpack(runtimeResult, 2, runtimeResult.n)
 end
 
@@ -857,7 +974,33 @@ local function contentMatches(entry, contents)
 	return false
 end
 
-function diagnostics.fileState(relativePath, entry, state)
+local function inspectFileContents(entry, readOk, contents)
+	local observation = {
+		readable = readOk and type(contents) == 'string',
+	}
+	if not observation.readable then
+		observation.error = contents
+		return observation
+	end
+	observation.bytes = #contents
+	observation.matches = entry and contentMatches(entry, contents) or 'unknown'
+	if hashCandidate then
+		local hashOk, digest = invokeHash(hashCandidate, hashOwner, hashMode, contents, hashUseOwner)
+		observation.sha256 = hashOk and validDigest(digest) and digest:lower() or 'hash-failed'
+	end
+	return observation
+end
+
+local function inspectCachedFile(path, entry)
+	local observation = {exists = safeIsFile(path)}
+	if not observation.exists then return observation end
+	local readOk, contents = pcall(readfile, path)
+	local contentObservation = inspectFileContents(entry, readOk, contents)
+	for key, value in contentObservation do observation[key] = value end
+	return observation
+end
+
+function diagnostics.fileState(relativePath, entry, state, observed)
 	relativePath = relativePath:gsub('\\', '/')
 	local path
 	if relativePath:sub(1, #folder + 1) == folder..'/' then
@@ -866,7 +1009,8 @@ function diagnostics.fileState(relativePath, entry, state)
 		relativePath = relativePath:gsub('^badvape/', '', 1)
 		path = folder..'/'..relativePath
 	end
-	local exists = safeIsFile(path)
+	local observation = type(observed) == 'table' and observed or inspectCachedFile(path, entry)
+	local exists = observation.exists == true
 	local fields = {
 		exists = exists,
 		expectedBytes = entry and entry.bytes or 'unknown',
@@ -876,17 +1020,13 @@ function diagnostics.fileState(relativePath, entry, state)
 		validation = hashCandidate and 'sha256+size' or 'unavailable',
 	}
 	if exists then
-		local ok, contents = pcall(readfile, path)
-		fields.readable = ok and type(contents) == 'string'
+		fields.readable = observation.readable == true
 		if fields.readable then
-			fields.bytes = #contents
-			fields.matches = entry and contentMatches(entry, contents) or 'unknown'
-			if hashCandidate then
-				local hashOk, digest = invokeHash(hashCandidate, hashOwner, hashMode, contents, hashUseOwner)
-				fields.sha256 = hashOk and validDigest(digest) and digest:lower() or 'hash-failed'
-			end
+			fields.bytes = observation.bytes
+			fields.matches = observation.matches
+			if hashCandidate then fields.sha256 = observation.sha256 or 'hash-failed' end
 		else
-			fields.error = contents
+			fields.error = observation.error
 		end
 	end
 	diagnostics.record('file_state', fields)
@@ -1150,17 +1290,18 @@ if manifest then
 			end
 			profilePlace = tonumber(profilePlace)
 			local reasons = {}
-			local localExists = safeIsFile(localPath)
+			-- Read/hash each cached file once. The previous path performed the
+			-- validation here and then repeated the same read/hash inside
+			-- diagnostics.fileState, which was especially expensive with the pure
+			-- Luau SHA-256 fallback.
+			local observation = inspectCachedFile(localPath, entry)
+			local localExists = observation.exists == true
 			if not localExists then table.insert(reasons, 'missing') end
 			if seedProfile and not profileSeeded then table.insert(reasons, 'profile-seed') end
 			if releaseProfile and forceProfileOverride then table.insert(reasons, 'profile-override') end
 			if runtimeFile and forceRuntimeRepair then table.insert(reasons, 'runtime-repair') end
 			local needsDownload = #reasons > 0
-			local localMatchesRelease = false
-			if profileFile and localExists then
-				local readOk, cached = pcall(readfile, localPath)
-				localMatchesRelease = readOk and contentMatches(entry, cached)
-			end
+			local localMatchesRelease = observation.matches == true
 			local shouldStageProfile = profileFile
 				and profileKind ~= nil
 				and profilePlace == currentProfilePlace
@@ -1178,9 +1319,10 @@ if manifest then
 				shouldStageProfile = false
 			end
 			if not profileFile and not needsDownload then
-				local ok, cached = pcall(readfile, localPath)
-				needsDownload = not ok or not contentMatches(entry, cached)
-				if needsDownload then table.insert(reasons, ok and 'content-mismatch' or 'read-failed') end
+				needsDownload = not observation.readable or observation.matches ~= true
+				if needsDownload then
+					table.insert(reasons, observation.readable and 'content-mismatch' or 'read-failed')
+				end
 			end
 			if not profileFile and not needsDownload then
 				needsDownload = not hasPreviousIndex
@@ -1199,7 +1341,7 @@ if manifest then
 					stagedRelativePath = stagedRelativePath,
 				})
 				nextIndex[entry.path] = {bytes = entry.bytes, sha256 = entry.sha256}
-				diagnostics.fileState(entry.path, entry, 'pending:profile-update')
+				diagnostics.fileState(entry.path, entry, 'pending:profile-update', observation)
 				continue
 			end
 			-- Existing profile files are user-owned.  A release hash mismatch is
@@ -1207,7 +1349,7 @@ if manifest then
 			-- staged above (for the active game's profiles) or preserved here.
 			if profileFile and localExists and not needsDownload then
 				nextIndex[entry.path] = {bytes = entry.bytes, sha256 = entry.sha256}
-				diagnostics.fileState(entry.path, entry, 'user-preserved')
+				diagnostics.fileState(entry.path, entry, 'user-preserved', observation)
 				continue
 			end
 			if needsDownload then
@@ -1216,14 +1358,28 @@ if manifest then
 					localPath = localPath,
 					reason = table.concat(reasons, ','),
 				})
-				diagnostics.fileState(entry.path, entry, 'pending:'..table.concat(reasons, ','))
+				diagnostics.fileState(entry.path, entry, 'pending:'..table.concat(reasons, ','), observation)
 			else
 				nextIndex[entry.path] = {bytes = entry.bytes, sha256 = entry.sha256}
-				diagnostics.fileState(entry.path, entry, 'cached')
+				diagnostics.fileState(entry.path, entry, 'cached', observation)
 			end
 		end
 	end
-	diagnostics.record('install_plan', {cached = requiredCount - #pending, pending = #pending})
+	local coldRuntimeInstall = not hasPreviousIndex or not profileSeeded
+	if not coldRuntimeInstall then
+		for _, pendingFile in ipairs(pending) do
+			if not pendingFile.profileUpdate then
+				coldRuntimeInstall = true
+				break
+			end
+		end
+	end
+	shared.BadVapeColdStart = coldRuntimeInstall
+	diagnostics.record('install_plan', {
+		cached = requiredCount - #pending,
+		coldStart = coldRuntimeInstall,
+		pending = #pending,
+	})
 	if forceProfileOverride then
 		for path in releaseProfileOverridePaths do
 			if not manifestPaths[path] then
@@ -1331,7 +1487,9 @@ if manifest then
 				sha256 = pendingFile.entry.sha256,
 			})
 		end
-		diagnostics.fileState(pendingFile.entry.path, pendingFile.entry, 'installed')
+		local installedObservation = inspectFileContents(pendingFile.entry, readOk, installed)
+		installedObservation.exists = readOk and type(installed) == 'string'
+		diagnostics.fileState(pendingFile.entry.path, pendingFile.entry, 'installed', installedObservation)
 	end
 	for _, path in ipairs(retiredPending) do
 		local ok, result = pcall(neutralizeRetiredRuntimePath, path)

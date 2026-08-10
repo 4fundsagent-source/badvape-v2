@@ -2892,8 +2892,9 @@ function mainapi:CreateCategoryList(categorysettings)
 						mainapi.Binding = {SetBind = bindFunction, Bind = v.Bind}
 						return
 					end
-					mainapi:Save(v.Name)
-					mainapi:Load(true)
+					-- Save the active profile, then load the profile that was clicked.
+					mainapi:Save()
+					mainapi:Load(true, v.Name)
 				end)
 				if v.Name == mainapi.Profile then
 					self.Selected = object
@@ -3143,6 +3144,8 @@ local moduleNameAliases = {
 	AutoRagnar = 'Auto Ragnar',
 	AutoKrystal = 'Auto Krystal',
 	AutoZeno = 'Auto Zeno',
+	AutoXurot = 'Auto Void Dragon Breath',
+	['Auto Xurot'] = 'Auto Void Dragon Breath',
 	AutoBank = 'Auto Bank',
 	AutoCyber = 'Auto Cyber',
 	BedPatcher = 'Auto Bed Patcher',
@@ -3429,41 +3432,101 @@ function mainapi:SaveOptions(object, savedoptions)
 end
 
 function mainapi:Uninject()
-	mainapi:Save()
+	if mainapi.Uninjecting or mainapi.Uninjected then
+		return false
+	end
+	mainapi.Uninjecting = true
 	mainapi.Loaded = nil
-	for _, v in self.Modules do
-		if v.Enabled then
-			v:Toggle()
-		end
-		v.Button = nil
-		v.Options = {}
-	end
-	for _, v in self.Legit.Modules do
-		if v.Enabled then
-			v:Toggle()
+	local reloadRequested = shared.BadVapeReload == true
+	pcall(mainapi.Save, mainapi)
+	local function disable(object)
+		if object == nil then return end
+		local enabledOk, enabled = pcall(function() return object.Enabled end)
+		local toggleOk, toggle = pcall(function() return object.Toggle end)
+		if enabledOk and enabled and toggleOk and type(toggle) == 'function' then
+			pcall(toggle, object)
 		end
 	end
-	for _, v in self.Categories do
-		if v.Type == 'Overlay' and v.Button.Enabled then
-			v.Button:Toggle()
+	if type(self.Modules) == 'table' then
+		for _, v in self.Modules do
+			disable(v)
+			if type(v) == 'table' then
+				v.Button = nil
+				v.Options = {}
+			end
 		end
 	end
-	for _, v in mainapi.Connections do
-		cleanupHandle(v)
+	local legit = self.Legit
+	if type(legit) == 'table' and type(legit.Modules) == 'table' then
+		for _, v in legit.Modules do
+			disable(v)
+		end
+	end
+	if type(self.Categories) == 'table' then
+		for _, v in self.Categories do
+			if type(v) == 'table' and v.Type == 'Overlay' then
+				disable(v.Button)
+			end
+		end
+	end
+	local connections = mainapi.Connections
+	if type(connections) == 'table' then
+		for _, v in connections do
+			pcall(cleanupHandle, v)
+		end
+		table.clear(connections)
 	end
 	if mainapi.ThreadFix then
-		setthreadidentity(8)
-		clickgui.Visible = false
-		mainapi:BlurCheck()
+		pcall(setthreadidentity, 8)
+		pcall(function()
+			if clickgui then clickgui.Visible = false end
+			mainapi:BlurCheck()
+		end)
 	end
-	mainapi.gui:ClearAllChildren()
-	mainapi.gui:Destroy()
-	table.clear(mainapi.Libraries)
-	loopClean(mainapi)
+	pcall(function()
+		if mainapi.gui then
+			mainapi.gui:ClearAllChildren()
+			mainapi.gui:Destroy()
+		end
+	end)
+	if type(mainapi.Libraries) == 'table' then
+		table.clear(mainapi.Libraries)
+	end
+	pcall(loopClean, mainapi)
+	mainapi.Uninjecting = false
+	mainapi.Uninjected = true
+	mainapi.Uninject = function() return false end
 	if shared.BadVape == mainapi then shared.BadVape = nil end
 	if _G.BadVape == mainapi then _G.BadVape = nil end
-	shared.BadVapeReload = nil
+	if not reloadRequested then
+		shared.BadVapeReload = nil
+	end
 	shared.BadVapeIndependent = nil
+	return true
+end
+
+function mainapi:Reinject()
+	if mainapi.Uninjecting or mainapi.Uninjected then
+		return false
+	end
+	local folder = shared.BadVapeFolder or 'badvape'
+	local source
+	if shared.BadVapeDeveloper then
+		source = readfile(folder..'/loader.lua')
+	else
+		source = game:HttpGet(
+			'https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'
+				..readfile(folder..'/profiles/commit.txt')..'/loader.lua',
+			true
+		)
+	end
+	local loader, loadError = loadstring(source, 'loader')
+	if type(loader) ~= 'function' then
+		error(loadError or 'BadVape loader rejected', 0)
+	end
+	shared.BadVapeReload = true
+	pcall(mainapi.Uninject, mainapi)
+	return loader(license)
 end
 
 gui = Instance.new('ScreenGui')
@@ -3660,12 +3723,68 @@ mainapi:Clean(friends.ColorUpdate)
 --[[
 	Profiles
 ]]
-mainapi:CreateCategoryList({
+local profiles = mainapi:CreateCategoryList({
 	Name = 'Profiles',
 	Icon = getcustomasset('badvape/assets/old/profilesicon.png'),
-	Placeholder = 'Type name',
+	Placeholder = 'Create new profile',
 	WindowSize = 250,
 	Profiles = true
+})
+local profileName = profiles:CreateTextBox({
+	Name = 'Profile name',
+	Placeholder = 'name for the new profile',
+	Darker = true,
+})
+local function profileFile(name)
+	return 'badvape/profiles/'..tostring(name)..tostring(mainapi.Place)..'.txt'
+end
+
+local function profileSummary(name)
+	local path = profileFile(name)
+	if not isfile(path) then return 0, {} end
+	local ok, data = pcall(loadJson, path)
+	if not ok or type(data) ~= 'table' then return 0, {} end
+	local modules = {}
+	for moduleName, value in pairs(data.Modules or {}) do
+		if type(moduleName) == 'string' and type(value) == 'table' then table.insert(modules, moduleName) end
+	end
+	for moduleName, value in pairs(data.Legit or {}) do
+		if type(moduleName) == 'string' and type(value) == 'table' then table.insert(modules, moduleName) end
+	end
+	table.sort(modules)
+	return #modules, modules
+end
+
+profiles:CreateButton({
+	Name = 'Create new',
+	Function = function()
+		local name = tostring(profileName.Value or ''):gsub('^%s+', ''):gsub('%s+$', '')
+		if name == '' or #name > 64 or name:find('[\\/:*%?"<>|]') or name:find('%.%.')
+			or not name:match('^[%w _%-%(%)%.]+$') then
+			return mainapi:CreateNotification('Profiles', 'Choose a valid profile name.', 5, 'warning')
+		end
+		for _, profile in ipairs(mainapi.Profiles or {}) do
+			if string.lower(tostring(profile.Name or '')) == string.lower(name) then
+				return mainapi:CreateNotification('Profiles', 'That profile already exists.', 5, 'warning')
+			end
+		end
+		profiles:ChangeValue(name)
+		mainapi:Load(true, name)
+		profileName:SetValue('')
+		mainapi:CreateNotification('Profiles', 'Created '..name..'.', 5, 'info')
+	end,
+	Tooltip = 'Create a named profile from the current settings.'
+})
+profiles:CreateButton({
+	Name = 'Profile details',
+	Function = function()
+		local count, modules = profileSummary(mainapi.Profile)
+		local preview = #modules > 0 and table.concat(modules, ', ') or 'No saved modules'
+		if #preview > 220 then preview = preview:sub(1, 217)..'...' end
+		mainapi:CreateNotification('Profile: '..tostring(mainapi.Profile),
+			('%d saved modules | %s'):format(count, preview), 10, 'info')
+	end,
+	Tooltip = 'Show the selected profile name, module count, and saved modules.'
 })
 
 --[[
@@ -3682,8 +3801,10 @@ local cloudUpdating = false
 local cloudPage = 1
 local cloudPageSize = 50
 local cloudTotal = 0
+local cloudMineMode = false
 local cloudSelectedId
 local cloudSession
+local cloudDetails
 
 local function cloudUrlEncode(value)
 	if type(httpService.UrlEncode) == 'function' then
@@ -3709,6 +3830,29 @@ local function cloudDecode(body)
 	if type(body) ~= 'string' or body == '' then return nil end
 	local ok, result = pcall(httpService.JSONDecode, httpService, body)
 	return ok and type(result) == 'table' and result or nil
+end
+
+local function cloudSelectedEntry()
+	if not cloudSelectedId then return nil end
+	for _, item in pairs(cloudEntries) do
+		if type(item) == 'table' and item.id == cloudSelectedId then return item end
+	end
+	return nil
+end
+
+local function updateCloudDetails()
+	if not cloudDetails then return end
+	local item = cloudSelectedEntry()
+	if not item then
+		cloudDetails:SetValue('Select a public config to view its details.')
+		return
+	end
+	local description = tostring(item.description or ''):gsub('[\r\n]+', ' ')
+	if #description > 100 then description = description:sub(1, 97)..'...' end
+	local details = ('%s | %s | %.1f stars (%d) | %d installs')
+		:format(tostring(item.name or 'Unnamed'), description ~= '' and description or 'No description',
+			tonumber(item.ratingAverage) or 0, tonumber(item.ratingCount) or 0, tonumber(item.installs) or 0)
+	cloudDetails:SetValue(details)
 end
 
 local function cloudPrepareGui(remoteGui, previousGui, installName)
@@ -3905,14 +4049,25 @@ cloudConfigs = mainapi:CreateCategoryList({
 			control:ChangeValue()
 			cloudUpdating = false
 		end
+		updateCloudDetails()
 	end
 })
 local cloudSearch = cloudConfigs:CreateTextBox({Name = 'Search', Placeholder = 'name or description', Function = function() cloudPage = 1 end})
 local cloudSort = cloudConfigs:CreateDropdown({Name = 'Sort', List = {'recent', 'rating', 'installs', 'name'}, Function = function() cloudPage = 1 end})
 local cloudUploadName = cloudConfigs:CreateTextBox({Name = 'Upload name', Placeholder = 'name shown to others'})
 local cloudDescription = cloudConfigs:CreateTextBox({Name = 'Description', Placeholder = 'short description'})
+local cloudUploadPublic = cloudConfigs:CreateToggle({Name = 'Publish upload', Default = true, Tooltip = 'Make this upload visible in the public config list.'})
 local cloudInstallName = cloudConfigs:CreateTextBox({Name = 'Install as', Placeholder = 'local profile name'})
 local cloudRating = cloudConfigs:CreateDropdown({Name = 'Rating', List = {'1', '2', '3', '4', '5'}})
+cloudDetails = cloudConfigs:CreateTextBox({Name = 'Selected config', Placeholder = 'Select a public config', Function = function() end})
+do
+	local detailsBackground = cloudDetails.Object:FindFirstChild('BKG')
+	local detailsBox = detailsBackground and detailsBackground:FindFirstChildWhichIsA('TextBox')
+	if detailsBox then
+		detailsBox.TextEditable = false
+		detailsBox.ClearTextOnFocus = false
+	end
+end
 local function cloudNotify(text, kind) mainapi:CreateNotification('Cloud Configs', text, 7, kind) end
 local function cloudFindEntry(id)
 	for _, item in pairs(cloudEntries) do if type(item) == 'table' and item.id == id then return item end end
@@ -3947,8 +4102,10 @@ local function cloudRefresh()
 		local authenticated, authError = authenticateCloud()
 		if not authenticated then cloudNotify('Cloud authentication failed: '..tostring(authError), 'warning'); cloudUpdating = false; return end
 		local function fetch()
-			return cloudRequestAuthenticated('GET', '/configs?q='..cloudUrlEncode(cloudSearch.Value)
-				..'&sort='..tostring(cloudSort.Value or 'recent')
+			local query = tostring(cloudSearch.Value or '')
+			local endpoint = cloudMineMode and '/configs/owned?'
+				or '/configs?q='..cloudUrlEncode(query)..'&sort='..tostring(cloudSort.Value or 'recent')
+			return cloudRequestAuthenticated('GET', endpoint
 				..'&page='..tostring(cloudPage)
 				..'&limit='..tostring(cloudPageSize)
 				..'&placeId='..tostring(mainapi.Place), nil, true)
@@ -3958,7 +4115,7 @@ local function cloudRefresh()
 			if cloudShouldReauthenticate(err) then invalidateCloudSession() end
 			cloudNotify('Could not load cloud configs: '..tostring(err), 'warning'); cloudUpdating = false; return
 		end
-		cloudEntries = {}; cloudSelectedId = nil; cloudConfigs.List = {}; cloudConfigs.ListEnabled = {}
+		cloudEntries = {}; cloudSelectedId = nil; updateCloudDetails(); cloudConfigs.List = {}; cloudConfigs.ListEnabled = {}
 		cloudTotal = tonumber(response.total) or 0
 		for _, item in ipairs(response.items or {}) do
 			local name = tostring(item.name or 'Unnamed')
@@ -3967,7 +4124,7 @@ local function cloudRefresh()
 			while cloudEntries[label] do label = name..' ('..suffix..')'; suffix += 1 end
 			cloudEntries[label] = item; table.insert(cloudConfigs.List, label)
 		end
-		cloudConfigs:ChangeValue(); cloudUpdating = false
+		cloudConfigs:ChangeValue(); updateCloudDetails(); cloudUpdating = false
 		local pageCount = math.max(1, math.ceil(cloudTotal / cloudPageSize))
 		cloudNotify('Cloud configs refreshed (page '..tostring(cloudPage)..'/'..tostring(pageCount)..').', 'info')
 		end, function(errorMessage) return tostring(errorMessage) end)
@@ -3986,6 +4143,11 @@ cloudConfigs:CreateButton({Name = 'Next page', Function = function()
 	cloudPage += 1; cloudRefresh()
 end})
 cloudConfigs:CreateButton({Name = 'Refresh', Function = cloudRefresh})
+cloudConfigs:CreateButton({Name = 'My uploads', Function = function()
+	cloudMineMode = not cloudMineMode
+	cloudPage = 1
+	cloudRefresh()
+end})
 cloudConfigs:CreateButton({Name = 'Upload current', Function = function()
 	cloudSpawn(function()
 		local name = cloudSafeName(cloudUploadName.Value, mainapi.Profile)
@@ -3998,7 +4160,7 @@ cloudConfigs:CreateButton({Name = 'Upload current', Function = function()
 		if not isfile(configPath) or not isfile(guiPath) then return cloudNotify('Current profile files are unavailable.', 'warning') end
 		local config, guiData = cloudDecode(readfile(configPath)), cloudDecode(readfile(guiPath))
 		if not config or not guiData then return cloudNotify('Current profile JSON is invalid.', 'warning') end
-		local response, err = cloudRequestAuthenticated('POST', '/configs', {name = name, description = tostring(cloudDescription.Value or ''), config = config, gui = guiData})
+		local response, err = cloudRequestAuthenticated('POST', '/configs', {name = name, description = tostring(cloudDescription.Value or ''), config = config, gui = guiData, published = cloudUploadPublic.Enabled})
 		if not response then return cloudNotify('Upload failed: '..tostring(err), 'warning') end
 		cloudNotify('Uploaded '..name..'.', 'info'); cloudRefresh()
 	end)
@@ -4058,6 +4220,51 @@ cloudConfigs:CreateButton({Name = 'Rate selected', Function = function()
 		local response, err = cloudRequestAuthenticated('POST', '/configs/'..cloudSelectedId..'/rating', {revision = selected and selected.revision or 1, rating = tonumber(cloudRating.Value)})
 		if not response then return cloudNotify('Rating failed: '..tostring(err), 'warning') end
 		cloudNotify('Rating saved.', 'info'); cloudRefresh()
+	end)
+end})
+cloudConfigs:CreateButton({Name = 'Like selected', Function = function()
+	cloudSpawn(function()
+		if not cloudSelectedId then return cloudNotify('Select a cloud config first.', 'warning') end
+		local authenticated, authError = authenticateCloud()
+		if not authenticated then return cloudNotify('Cloud authentication failed: '..tostring(authError), 'warning') end
+		local selected = cloudFindEntry(cloudSelectedId)
+		local response, err = cloudRequestAuthenticated('POST', '/configs/'..cloudSelectedId..'/like', {revision = selected and selected.revision or 1, liked = true})
+		if not response then return cloudNotify('Like failed: '..tostring(err), 'warning') end
+		cloudNotify('Like saved.', 'info')
+		cloudRefresh()
+	end)
+end})
+cloudConfigs:CreateButton({Name = 'Publish selected', Function = function()
+	cloudSpawn(function()
+		if not cloudSelectedId then return cloudNotify('Select one of your uploads first.', 'warning') end
+		local authenticated, authError = authenticateCloud()
+		if not authenticated then return cloudNotify('Cloud authentication failed: '..tostring(authError), 'warning') end
+		local response, err = cloudRequestAuthenticated('POST', '/configs/'..cloudSelectedId..'/publish', {published = true})
+		if not response then return cloudNotify('Publish failed: '..tostring(err), 'warning') end
+		cloudNotify('Upload published.', 'info')
+		cloudRefresh()
+	end)
+end})
+cloudConfigs:CreateButton({Name = 'Unpublish selected', Function = function()
+	cloudSpawn(function()
+		if not cloudSelectedId then return cloudNotify('Select one of your uploads first.', 'warning') end
+		local authenticated, authError = authenticateCloud()
+		if not authenticated then return cloudNotify('Cloud authentication failed: '..tostring(authError), 'warning') end
+		local response, err = cloudRequestAuthenticated('POST', '/configs/'..cloudSelectedId..'/publish', {published = false})
+		if not response then return cloudNotify('Unpublish failed: '..tostring(err), 'warning') end
+		cloudNotify('Upload hidden from the public list.', 'info')
+		cloudRefresh()
+	end)
+end})
+cloudConfigs:CreateButton({Name = 'Delete selected', Function = function()
+	cloudSpawn(function()
+		if not cloudSelectedId then return cloudNotify('Select one of your uploads first.', 'warning') end
+		local authenticated, authError = authenticateCloud()
+		if not authenticated then return cloudNotify('Cloud authentication failed: '..tostring(authError), 'warning') end
+		local response, err = cloudRequestAuthenticated('DELETE', '/configs/'..cloudSelectedId, nil)
+		if not response then return cloudNotify('Delete failed: '..tostring(err), 'warning') end
+		cloudNotify('Upload deleted.', 'info')
+		cloudRefresh()
 	end)
 end})
 
@@ -4217,12 +4424,7 @@ topbar:CreateDropdown({
 	Function = function(val, mouse)
 		if mouse then
 			writefile('badvape/profiles/gui.txt', val)
-			shared.BadVapeReload = true
-			if shared.BadVapeDeveloper then
-				loadstring(readfile('badvape/loader.lua'), 'loader')(license)
-			else
-				loadstring(game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..readfile('badvape/profiles/commit.txt')..'/loader.lua', true), 'loader')(license)
-			end
+			mainapi:Reinject()
 		end
 	end,
 	Tooltip = 'new - The newest BadVape UI\nold - The classic BadVape UI'
@@ -4255,12 +4457,7 @@ topbar:CreateButton({
 		if isfile('badvape/profiles/'..mainapi.Profile..mainapi.Place..'.txt') and delfile then
 			delfile('badvape/profiles/'..mainapi.Profile..mainapi.Place..'.txt')
 		end
-		shared.BadVapeReload = true
-		if shared.BadVapeDeveloper then
-			loadstring(readfile('badvape/loader.lua'), 'loader')(license)
-		else
-			loadstring(game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..readfile('badvape/profiles/commit.txt')..'/loader.lua', true), 'loader')(license)
-		end
+		mainapi:Reinject()
 	end,
 	Tooltip = 'This will set your profile to the default settings of BadVape'
 })
@@ -4319,12 +4516,7 @@ topbar:CreateButton({
 topbar:CreateButton({
 	Name = 'REINEJCT',
 	Function = function()
-		shared.BadVapeReload = true
-		if shared.BadVapeDeveloper then
-			loadstring(readfile('badvape/loader.lua'), 'loader')(license)
-		else
-			loadstring(game:HttpGet('https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/'..readfile('badvape/profiles/commit.txt')..'/loader.lua', true), 'loader')(license)
-		end
+		mainapi:Reinject()
 	end,
 	Tooltip = 'Reloads BadVape for debugging purposes'
 })
@@ -4833,8 +5025,8 @@ mainapi:Clean(inputService.InputBegan:Connect(function(inputObj)
 
 		for _, v in mainapi.Profiles do
 			if checkKeybinds(mainapi.HeldKeybinds, v.Bind, inputObj.KeyCode.Name) and v.Name ~= mainapi.Profile then
-				mainapi:Save(v.Name)
-				mainapi:Load(true)
+				mainapi:Save()
+				mainapi:Load(true, v.Name)
 				break
 			end
 		end

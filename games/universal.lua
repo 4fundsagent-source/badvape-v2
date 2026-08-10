@@ -4705,7 +4705,8 @@ end)
 
 run(function()
     local Swim
-    -- Terrain may not exist while the game is loading; cloneref rejects nil.
+    -- Terrain is optional and may not exist while the game is still loading.
+    -- cloneref requires an Instance, so do not pass it a nil lookup result.
     local terrainInstance = workspace:FindFirstChildWhichIsA('Terrain')
     local terrain = terrainInstance and cloneref(terrainInstance) or nil
     local lastpos = Region3.new(Vector3.zero, Vector3.zero)

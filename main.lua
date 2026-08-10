@@ -47,24 +47,76 @@ recordDiagnostic('main_start', {
 		or (license.Key and (license.Key:match('^BV%-%u%-') and 'license' or 'uid') or 'missing'),
 	placeId = game.PlaceId,
 })
-local readyDeadline = tick() + 15
+local floodCraftPlaces = {
+	[6872265039] = true,
+	[6872274481] = true,
+	[8444591321] = true,
+	[8560631822] = true,
+}
+local function floodCraftClientReady()
+	local placeId = tonumber(game.PlaceId)
+	if not floodCraftPlaces[placeId] then
+		return true
+	end
+	local workspaceService = game:GetService('Workspace')
+	local marker = workspaceService:FindFirstChild('ClientFlameReady')
+	return marker ~= nil
+		and (type(marker.IsA) ~= 'function' or marker:IsA('BoolValue'))
+		and marker.Value == true
+end
+local readyDeadline = tick() + 45
+local runtimeReady = false
+local runtimeReadyState = {}
 while tick() < readyDeadline do
 	local ready = false
+	runtimeReadyState.gameLoaded = false
+	runtimeReadyState.playerGui = false
+	runtimeReadyState.playerScripts = false
+	runtimeReadyState.clientFlameReady = false
 	pcall(function()
 		local players = game:GetService('Players')
 		local localPlayer = players.LocalPlayer
-		ready = game:IsLoaded()
-			or (localPlayer and localPlayer:FindFirstChild('PlayerGui') ~= nil)
+		runtimeReadyState.gameLoaded = game:IsLoaded()
+		runtimeReadyState.playerGui = localPlayer ~= nil
+			and localPlayer:FindFirstChild('PlayerGui') ~= nil
+		runtimeReadyState.playerScripts = localPlayer ~= nil
+			and localPlayer:FindFirstChild('PlayerScripts') ~= nil
+		runtimeReadyState.clientFlameReady = floodCraftClientReady()
+		ready = runtimeReadyState.gameLoaded
+			and runtimeReadyState.playerGui
+			and runtimeReadyState.playerScripts
+			and runtimeReadyState.clientFlameReady
 	end)
-	if ready then break end
+	if ready then
+		runtimeReady = true
+		break
+	end
 	task.wait()
 end
+if not runtimeReady then
+	recordDiagnostic('runtime_ready_timeout', runtimeReadyState)
+	error('BadVape destination place did not finish loading', 0)
+end
+recordDiagnostic('runtime_ready', runtimeReadyState)
+-- A loader sets this marker before starting a replacement runtime.  Capture it
+-- before tearing down the previous GUI: the old runtime's Uninject method is
+-- allowed to clear its own globals, but it must not make the replacement look
+-- like a normal first load.
+local reloadRequested = shared.BadVapeReload == true
 local staleVape = shared.BadVape
 if type(staleVape) == 'table' and type(staleVape.Uninject) == 'function' then
 	pcall(staleVape.Uninject, staleVape)
 end
 if shared.BadVape == staleVape then
 	shared.BadVape = nil
+end
+if _G.BadVape == staleVape then
+	_G.BadVape = nil
+end
+if reloadRequested then
+	-- Restore the handoff marker after stale teardown.  This is deliberately
+	-- done even when the old Uninject failed part-way through cleanup.
+	shared.BadVapeReload = true
 end
 
 local vape
@@ -168,27 +220,51 @@ local teleportQueueParts = {}
 local teleportQueueFlushed = false
 shared.BadVapeTeleportQueueParts = teleportQueueParts
 local function flushTeleportQueue()
-	if teleportQueueFlushed then return true end
+	if teleportQueueFlushed then
+		recordDiagnostic('teleport_queue_flush_skipped', {reason = 'already-flushed'})
+		return true
+	end
 	local names = {}
 	for name in teleportQueueParts do table.insert(names, name) end
 	table.sort(names)
 	local scripts = {}
 	for _, name in names do table.insert(scripts, teleportQueueParts[name]) end
-	if #scripts == 0 then return false end
+	if #scripts == 0 then
+		recordDiagnostic('teleport_queue_flush_failed', {reason = 'no-parts'})
+		return false
+	end
+	recordDiagnostic('teleport_queue_flush_start', {
+		candidates = #teleportQueueCandidates(),
+		parts = #scripts,
+	})
 	local source = table.concat(scripts, '\n')
-	for _, queueTeleport in teleportQueueCandidates() do
+	local candidates = teleportQueueCandidates()
+	for index, queueTeleport in candidates do
 		local ok, result = pcall(queueTeleport, source)
 		if ok and result ~= false then
 			teleportQueueFlushed = true
+			recordDiagnostic('teleport_queue_flush_complete', {
+				adapter = index,
+				parts = #scripts,
+			})
 			return true
 		end
 	end
+	recordDiagnostic('teleport_queue_flush_failed', {
+		candidates = #candidates,
+		parts = #scripts,
+		reason = 'all-adapters-rejected',
+	})
 	return false
 end
 shared.BadVapeQueueTeleport = function(name, source)
 	if type(name) ~= 'string' or name == '' or type(source) ~= 'string' or source == '' then return false end
 	if teleportQueueFlushed then return false end
 	teleportQueueParts[name] = source
+	recordDiagnostic('teleport_queue_part_registered', {
+		name = name,
+		parts = #teleportQueueParts,
+	})
 	return true
 end
 shared.BadVapeFlushTeleportQueue = flushTeleportQueue
@@ -329,6 +405,183 @@ local function loadMaxPrediction()
 	end
 end
 
+local teleportReloadInstalled = false
+local function installTeleportReload()
+	if teleportReloadInstalled or shared.BadVapeIndependent then
+		return teleportReloadInstalled
+	end
+
+	local teleportCredential = tostring(license.Key or '')
+	local teleportMarker, teleportLuaProtKey = teleportCredential:match('^LP%-([BR])%-([a-f0-9]+)$')
+	local teleportUid = teleportCredential:lower()
+	if teleportMarker and #teleportLuaProtKey == 24 then
+		-- Keep the product marker for local wrong-game detection. The runtime
+		-- installs only the raw key into LuaProt's global.
+	elseif #teleportUid >= 1 and #teleportUid <= 24 and teleportUid:match('^%l[%w_]*$') then
+		teleportCredential = teleportUid
+	else
+		teleportCredential = nil
+	end
+
+	if not teleportCredential then
+		if license.Key then
+			local message = license.Key:match('^BV%-%u%-')
+				and 'Automatic teleport reload needs your UID. Run /setuid, then use /getscript.'
+				or 'Automatic teleport reload needs a current script. Run /getscript in Discord.'
+			vape:CreateNotification('BadVape', message, 10, 'warning')
+		end
+		teleportReloadInstalled = true
+		return false
+	end
+
+	local encodedCredential = httpService:JSONEncode(teleportCredential)
+	local installedRef = 'main'
+	if type(readfile) == 'function' then
+		local readOk, cachedRef = pcall(readfile, runtimeFolder..'/cache/public-release-ref.txt')
+		if readOk and type(cachedRef) == 'string'
+			and #cachedRef == 40 and cachedRef:match('^[0-9a-f]+$') then
+			installedRef = cachedRef
+		end
+	end
+	-- `main` is resolved by bootstrap/init; a cached SHA is forwarded so
+	-- teleport reloads stay on the exact release that was already installed.
+	local encodedReleaseRef = installedRef ~= 'main'
+		and httpService:JSONEncode(installedRef)
+		or 'nil'
+	local encodedFolder = httpService:JSONEncode(runtimeFolder)
+	local teleportScript
+	if shared.BadVapeDeveloper then
+		teleportScript = 'shared.BadVapeReload = true\n'
+			..'shared.BadVapeDeveloper = true\n'
+			..'shared.BadVapeFolder = '..encodedFolder..'\n'
+			..'local badVapeLoader, badVapeLoadError = loadstring(readfile(shared.BadVapeFolder.."/loader.lua"), "@badvape/loader.lua")\n'
+			..'if type(badVapeLoader) ~= "function" then error(badVapeLoadError or "BadVape local loader rejected", 0) end\n'
+			..'return badVapeLoader({Key = '..encodedCredential..'})'
+	else
+		local loaderUrl = httpService:JSONEncode(
+			'https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/main/bootstrap.lua'
+		)
+		teleportScript = 'shared.BadVapeReload = true\n'
+			..'shared.BadVapeFolder = '..encodedFolder..'\n'
+			..'local u = '..loaderUrl..'\n'
+			..'local s\n'
+			..'pcall(function() s = game:HttpGet(u, true) end)\n'
+			..'if type(s) ~= "string" or s == "" then\n'
+			..'  local h = type(http) == "table" and http or nil\n'
+			..'  local q = h and h.request or request\n'
+			..'  local adapters, seen = {q, http_request}, {}\n'
+			..'  for _, library in pairs({syn, fluxus, krnl}) do\n'
+			..'    if type(library) == "table" then table.insert(adapters, library.request) end\n'
+			..'  end\n'
+			..'  for _, requestFunction in ipairs(adapters) do\n'
+			..'    if type(requestFunction) == "function" and not seen[requestFunction] then\n'
+			..'      seen[requestFunction] = true\n'
+			..'      local ok, response = pcall(requestFunction, {Url = u, Method = "GET"})\n'
+			..'      local responseType = ok and type(response) or nil\n'
+			..'      local status = responseType == "string" and 200 or (responseType == "table" and tonumber(response.StatusCode or response.Status or response.status_code or response.status) or nil)\n'
+			..'      local body = responseType == "string" and response or (responseType == "table" and (response.Body or response.body) or nil)\n'
+			..'      if (status == nil or status == 0 or status == 200 or status == 201) and type(body) == "string" and body ~= "" and body ~= "404: Not Found" then s = body; break end\n'
+			..'    end\n'
+			..'  end\n'
+			..'end\n'
+			..'local b, e = loadstring(s, "@badvape/bootstrap")\n'
+			..'if type(b) ~= "function" then error(e or "BadVape bootstrap rejected", 0) end\n'
+			..'return b('..encodedCredential..', '..encodedReleaseRef..')'
+	end
+	if shared.BadVapeCustomProfile then
+		teleportScript = 'shared.BadVapeCustomProfile = '
+			..httpService:JSONEncode(tostring(shared.BadVapeCustomProfile))..'\n'..teleportScript
+	end
+
+	if not shared.BadVapeQueueTeleport('99-loader', teleportScript) then
+		recordDiagnostic('teleport_queue_registration_failed', {reason = 'queue-part-rejected'})
+		return false
+	end
+	recordDiagnostic('teleport_queue_ready', {
+		credentialKind = teleportMarker and 'luaprot' or 'uid',
+		releaseRef = installedRef,
+	})
+	local queueAttempted = false
+	local queueFlushScheduled = false
+	local teleportFailed = false
+	local teleportGeneration = 0
+	local function teleportStateName(state)
+		if type(state) == 'string' then
+			return state:lower()
+		end
+		local ok, enumName = pcall(function()
+			return state and state.Name
+		end)
+		if ok and type(enumName) == 'string' and enumName ~= '' then
+			return enumName:lower()
+		end
+		return tostring(state or ''):lower()
+	end
+	local function rearmTeleportQueue(reason)
+		teleportGeneration += 1
+		teleportFailed = true
+		queueAttempted = false
+		queueFlushScheduled = false
+		-- The executor may retain or discard a queued script after a failed
+		-- request. Re-arm the broker so the next accepted teleport can replace
+		-- it deterministically.
+		teleportQueueFlushed = false
+		recordDiagnostic('teleport_queue_rearmed', {reason = reason})
+	end
+	local function isTeleportFailure(state)
+		local name = teleportStateName(state)
+		return name:find('failed', 1, true) ~= nil
+			or name:find('cancel', 1, true) ~= nil
+	end
+	local function isTeleportStart(state)
+		local name = teleportStateName(state)
+		-- RequestedFromClient/RequestedFromServer can be emitted for a request
+		-- that is later rejected. Wait for an accepted transition state so a
+		-- transient lobby request cannot consume the one-shot queue handoff.
+		return name:find('started', 1, true) ~= nil
+			or name:find('waitingforserver', 1, true) ~= nil
+			or name:find('inprogress', 1, true) ~= nil
+	end
+	local connection = playersService.LocalPlayer.OnTeleport:Connect(function(teleportState)
+		recordDiagnostic('teleport_state', {state = tostring(teleportState)})
+		if isTeleportFailure(teleportState) then
+			rearmTeleportQueue('teleport-failed')
+			return
+		end
+		if not isTeleportStart(teleportState) or queueAttempted or queueFlushScheduled then return end
+		teleportFailed = false
+		teleportGeneration += 1
+		local generation = teleportGeneration
+		queueFlushScheduled = true
+		task.defer(function()
+			queueFlushScheduled = false
+			if teleportFailed or generation ~= teleportGeneration or queueAttempted then return end
+			queueAttempted = true
+			if not shared.BadVapeFlushTeleportQueue() then
+				queueAttempted = false
+				vape:CreateNotification('BadVape', 'Your executor could not queue the teleport reload.', 8, 'warning')
+			else
+				recordDiagnostic('teleport_started', {state = tostring(teleportState)})
+			end
+		end)
+	end)
+	vape:Clean(connection)
+	local teleportService = cloneref(game:GetService('TeleportService'))
+	if teleportService and teleportService.TeleportInitFailed then
+		local failureConnection = teleportService.TeleportInitFailed:Connect(function(player)
+			if player == playersService.LocalPlayer then
+				rearmTeleportQueue('teleport-init-failed')
+			end
+		end)
+		vape:Clean(failureConnection)
+	end
+	teleportReloadInstalled = true
+	if #teleportQueueCandidates() == 0 then
+		vape:CreateNotification('BadVape', 'This executor does not support queue on teleport.', 8, 'warning')
+	end
+	return true
+end
+
 local function finishLoading()
 	vape.Init = nil
 	local loaded, loadError = pcall(vape.Load, vape)
@@ -342,89 +595,10 @@ local function finishLoading()
 		until not vape.Loaded
 	end)
 
-	if not shared.BadVapeIndependent then
-		local teleportCredential = tostring(license.Key or '')
-		local teleportMarker, teleportLuaProtKey = teleportCredential:match('^LP%-([BR])%-([a-f0-9]+)$')
-		local teleportUid = teleportCredential:lower()
-		if teleportMarker and #teleportLuaProtKey == 24 then
-			-- Keep the product marker for local wrong-game detection. The runtime
-			-- installs only the raw key into LuaProt's global.
-		elseif #teleportUid >= 1 and #teleportUid <= 24 and teleportUid:match('^%l[%w_]*$') then
-			teleportCredential = teleportUid
-		else
-			teleportCredential = nil
-		end
-		if teleportCredential then
-			local encodedCredential = httpService:JSONEncode(teleportCredential)
-			-- `main` is resolved by bootstrap/init; a cached SHA is forwarded so
-			-- teleport reloads stay on the exact release that was just installed.
-			local installedRef = 'main'
-			if type(readfile) == 'function' then
-				local readOk, cachedRef = pcall(readfile, runtimeFolder..'/cache/public-release-ref.txt')
-				if readOk and type(cachedRef) == 'string'
-					and #cachedRef == 40 and cachedRef:match('^[0-9a-f]+$') then
-					installedRef = cachedRef
-				end
-			end
-			local encodedReleaseRef = installedRef ~= 'main'
-				and httpService:JSONEncode(installedRef)
-				or 'nil'
-			local encodedFolder = httpService:JSONEncode(runtimeFolder)
-			local teleportScript
-			if shared.BadVapeDeveloper then
-				teleportScript = 'shared.BadVapeReload = true\n'
-					..'shared.BadVapeDeveloper = true\n'
-					..'shared.BadVapeFolder = '..encodedFolder..'\n'
-					..'local badVapeLoader, badVapeLoadError = loadstring(readfile(shared.BadVapeFolder.."/loader.lua"), "@badvape/loader.lua")\n'
-					..'if type(badVapeLoader) ~= "function" then error(badVapeLoadError or "BadVape local loader rejected", 0) end\n'
-					..'return badVapeLoader({Key = '..encodedCredential..'})'
-			else
-				local loaderUrl = httpService:JSONEncode(
-					'https://raw.githubusercontent.com/4fundsagent-source/badvape-v2/main/bootstrap.lua'
-				)
-				teleportScript = 'shared.BadVapeReload = true\n'
-					..'shared.BadVapeFolder = '..encodedFolder..'\n'
-					..'local u = '..loaderUrl..'\n'
-					..'local s\n'
-					..'pcall(function() s = game:HttpGet(u, true) end)\n'
-					..'if type(s) ~= "string" or s == "" then\n'
-					..'  local h = type(http) == "table" and http or nil\n'
-					..'  local q = h and h.request or request\n'
-					..'  local r = q({Url = u, Method = "GET"})\n'
-					..'  s = r and (r.Body or r.body)\n'
-					..'end\n'
-					..'local b, e = loadstring(s, "@badvape/bootstrap")\n'
-					..'if type(b) ~= "function" then error(e or "BadVape bootstrap rejected", 0) end\n'
-					..'return b('..encodedCredential..', '..encodedReleaseRef..')'
-			end
-			if shared.BadVapeCustomProfile then
-				teleportScript = 'shared.BadVapeCustomProfile = '
-					..httpService:JSONEncode(tostring(shared.BadVapeCustomProfile))..'\n'..teleportScript
-			end
-			shared.BadVapeQueueTeleport('99-loader', teleportScript)
-			local queueAttempted = false
-			vape:Clean(playersService.LocalPlayer.OnTeleport:Connect(function()
-				if queueAttempted then return end
-				queueAttempted = true
-				task.defer(function()
-					if not shared.BadVapeFlushTeleportQueue() then
-						queueAttempted = false
-						vape:CreateNotification('BadVape', 'Your executor could not queue the teleport reload.', 8, 'warning')
-					end
-				end)
-			end))
-			if #teleportQueueCandidates() == 0 then
-				vape:CreateNotification('BadVape', 'This executor does not support queue on teleport.', 8, 'warning')
-			end
-		elseif license.Key then
-			local message = license.Key:match('^BV%-%u%-')
-				and 'Automatic teleport reload needs your UID. Run /setuid, then use /getscript.'
-				or 'Automatic teleport reload needs a current script. Run /getscript in Discord.'
-			vape:CreateNotification('BadVape', message, 10, 'warning')
-		end
-	end
+	installTeleportReload()
 
-	if not shared.BadVapeReload then
+	local suppressFinishedNotification = reloadRequested or shared.BadVapeReload == true
+	if not suppressFinishedNotification then
 		if not vape.Categories then return end
 		if vape.Categories.Main.Options['GUI bind indicator'].Enabled then
 			if vape.Place ~= 6872274481 then
@@ -437,6 +611,15 @@ local function finishLoading()
 				end
 			end)
 		end
+	end
+	-- The marker is a one-load handoff, not permanent runtime state.  Consume it
+	-- only after the replacement GUI has loaded so a failed startup can still be
+	-- diagnosed/retried normally.
+	if reloadRequested then
+		if shared.BadVapeReload == true then
+			shared.BadVapeReload = nil
+		end
+		reloadRequested = false
 	end
 end
 
@@ -652,6 +835,89 @@ local function showProfileUpdateMenu()
 	end
 end
 
+-- Show release notes in the same category/list UI used by the rest of the
+-- runtime.  The installer may provide a structured shared.BadVapeChangelog;
+-- the fallback keeps the window useful for revisions that only ship the
+-- runtime metadata.  Nothing here loads or executes a game module.
+local function showChangelogWindow()
+	local previousRevision = shared.BadVapeUpdated
+	if previousRevision == nil or shared.BadVapeChangelogShownFor == previousRevision then
+		return
+	end
+	if not vape or not vape.Loaded or type(vape.CreateCategoryList) ~= 'function' then
+		return
+	end
+	local currentRevision = ''
+	if isfile('badvape/profiles/commit.txt') then
+		local ok, value = pcall(readfile, 'badvape/profiles/commit.txt')
+		if ok and type(value) == 'string' then currentRevision = value end
+	end
+	if currentRevision == '' or currentRevision == tostring(previousRevision) then return end
+
+	local entries = {}
+	if type(shared.BadVapeChangelog) == 'table' then
+		for _, entry in ipairs(shared.BadVapeChangelog) do
+			if type(entry) == 'table' then
+				local title = tostring(entry.title or entry.Name or ''):gsub('^%s+', ''):gsub('%s+$', '')
+				local detail = tostring(entry.detail or entry.description or entry.Tooltip or ''):gsub('^%s+', ''):gsub('%s+$', '')
+				if title ~= '' then table.insert(entries, {title = title, detail = detail}) end
+			elseif type(entry) == 'string' and entry:gsub('%s+', '') ~= '' then
+				table.insert(entries, {title = entry, detail = ''})
+			end
+		end
+	end
+	if #entries == 0 then
+		entries = {
+			{title = 'Runtime updated', detail = 'BadVape is now running revision '..currentRevision},
+			{title = 'Profile metadata', detail = 'Named profile creation and saved-module details are available.'},
+			{title = 'Cloud config details', detail = 'Select a public config to view its rating and install metadata.'},
+		}
+	end
+
+	local icon = ''
+	local assetLoader = vape.Libraries and vape.Libraries.getcustomasset
+	if type(assetLoader) == 'function' then
+		local ok, value = pcall(assetLoader, 'badvape/assets/new/profilesicon.png')
+		if ok and type(value) == 'string' then icon = value end
+	end
+	local changelog = vape:CreateCategoryList({
+		Name = 'Changelog',
+		Icon = icon,
+		Placeholder = 'Release notes',
+		Color = Color3.fromRGB(85, 170, 255),
+		WindowSize = 250,
+		Size = UDim2.fromOffset(17, 10),
+		Position = UDim2.fromOffset(12, 16),
+	})
+	for _, entry in ipairs(entries) do
+		local title = tostring(entry.title):gsub('[%c]', ' ')
+		if #title > 48 then title = title:sub(1, 45)..'...' end
+		local detail = tostring(entry.detail or ''):gsub('[%c]', ' ')
+		changelog:CreateButton({
+			Name = '+ '..title,
+			Tooltip = detail ~= '' and detail or nil,
+			Function = function()
+				vape:CreateNotification('Changelog', detail ~= '' and detail or title, 8, 'info')
+			end,
+		})
+	end
+	changelog:CreateButton({
+		Name = 'Dismiss',
+		Function = function()
+			if type(vape.Remove) == 'function' then pcall(vape.Remove, vape, 'Changelog') end
+		end,
+	})
+	shared.BadVapeChangelogShownFor = previousRevision
+	if changelog.Button and type(changelog.Button.Toggle) == 'function' then
+		changelog.Button:Toggle()
+	end
+	if type(vape.Clean) == 'function' then
+		vape:Clean(function()
+			if type(vape.Remove) == 'function' then pcall(vape.Remove, vape, 'Changelog') end
+		end)
+	end
+end
+
 if not isfile('badvape/profiles/gui.txt') then
 	writefile('badvape/profiles/gui.txt', 'new')
 end
@@ -717,10 +983,25 @@ shared.BadVape = vape
 local previousUninject = vape.Uninject
 if type(previousUninject) == 'function' then
 	vape.Uninject = function(self, ...)
+		local ownsSharedRuntime = shared.BadVape == self
 		if shared.BadVapeDownloadFile == ownedDownloadFile then
 			shared.BadVapeDownloadFile = nil
 		end
 		local results = table.pack(pcall(previousUninject, self, ...))
+		-- These handles are runtime-scoped.  Clear only values owned by this
+		-- instance so a stale teardown cannot erase a replacement runtime's
+		-- teleport/auth state if both loaders briefly overlap.
+		if ownsSharedRuntime then
+			for _, key in {
+				'BadVapeLuaProtLoadSignal',
+				'BadVapeProtectedFailure',
+				'BadVapeTeleportQueueParts',
+				'BadVapeQueueTeleport',
+				'BadVapeFlushTeleportQueue',
+			} do
+				shared[key] = nil
+			end
+		end
 		restoreRuntimeEnvironment()
 		if not results[1] then
 			error(results[2], 0)
@@ -884,6 +1165,9 @@ local function installLuaProtRequestCompatibility()
 	for _, environment in environments do
 		install(environment, 'request')
 		install(rawEnvironmentValue(environment, 'http'), 'request')
+		for _, namespace in {'syn', 'fluxus', 'krnl'} do
+			install(rawEnvironmentValue(environment, namespace), 'request')
+		end
 	end
 
 	local usable = false
@@ -893,7 +1177,17 @@ local function installLuaProtRequestCompatibility()
 			and rawEnvironmentValue(httpLibrary, 'request') or nil
 		local directRequest = rawEnvironmentValue(environment, 'request')
 		local selectedByLoader = httpLibrary and httpRequest or directRequest
-		usable = usable or selectedByLoader == compatibleRequest
+		if selectedByLoader == compatibleRequest then
+			usable = true
+		else
+			for _, namespace in {'syn', 'fluxus', 'krnl'} do
+				local library = rawEnvironmentValue(environment, namespace)
+				if type(library) == 'table'
+					and rawEnvironmentValue(library, 'request') == compatibleRequest then
+					usable = true
+				end
+			end
+		end
 	end
 
 	local function restore()
@@ -1132,6 +1426,15 @@ local function loadGameModule(placeId)
 end
 
 if not shared.BadVapeIndependent then
+	-- Register the teleport handoff before any optional universal/game module
+	-- can wait on Knit or a controller.  A lobby module must never be able to
+	-- prevent the next server from receiving the clean runtime bootstrap.
+	installTeleportReload()
+	local registrationBatch = type(vape.BeginModuleRegistration) == 'function'
+		and type(vape.EndModuleRegistration) == 'function'
+	if registrationBatch then
+		vape:BeginModuleRegistration()
+	end
 	local universalPath = 'badvape/games/universal.lua'
 	local universalSourceOk, universalSource = pcall(downloadFile, universalPath)
 	local universalOk, universalError = false, universalSource
@@ -1146,14 +1449,22 @@ if not shared.BadVapeIndependent then
 	end
 	loadGameModule(game.PlaceId)
 	loadBadVapeTheme()
+	if registrationBatch then
+		vape:EndModuleRegistration()
+	end
+	-- Cold-start yielding is scoped to the initial universal/game/theme pass;
+	-- later custom-module loads should use the normal fast registration path.
+	shared.BadVapeColdStart = false
 	recordDiagnostic('main_finish_loading', {placeId = game.PlaceId})
 	finishLoading()
 	task.defer(showProfileUpdateMenu)
+	task.defer(showChangelogWindow)
 else
 	loadBadVapeTheme()
 	vape.Init = function(...)
 		local result = table.pack(finishLoading(...))
 		task.defer(showProfileUpdateMenu)
+		task.defer(showChangelogWindow)
 		return table.unpack(result, 1, result.n)
 	end
 	return vape

@@ -31,10 +31,15 @@ return function(vape, entitylib)
 	local Theme
 	local Mode
 	local RemoveClouds
+	local CloudSize
+	local CloudTransparency
+	local CloudColor
 	local newObjects = {}
 	local oldObjects = {}
 	local storeBlocks = {}
 	local originalSettings = {}
+	local preservedClouds = setmetatable({}, {__mode = 'k'})
+	local preservedCloudParts = setmetatable({}, {__mode = 'k'})
 	local timeConnection
 	local currentCloud
 	local characterConnection
@@ -47,14 +52,40 @@ return function(vape, entitylib)
 	local rootStableSince = 0
 	local waterWorlds
 	local waterTeam
-	local waterCharacter
-	-- Keep the client-side terrain operation bounded.  A 5000x5000 plane
-	-- allocates several times more voxels than a BedWars map needs and was
-	-- especially costly when the old movement invalidation refilled it.
-	local waterPlaneSize = 2048
+	local waterBounds
+	local waterBoundsSampledAt = 0
+	local waterBoundsSignature
+	-- Keep the historical footprint.  Placement is map-derived below, but the
+	-- plane itself stays 5000x5000 so smaller maps do not regress to the old
+	-- 2048-stud area.
+	local waterPlaneSize = 5000
+	local restoreWorkspaceClouds
+	local applyCloudRemovalState
 
 	local function getEntityLibrary()
 		return entitylib or vape.Libraries and vape.Libraries.entity
+	end
+
+	local function getRuntimeStore()
+		local environments = {}
+		if type(getgenv) == 'function' then
+			local ok, environment = pcall(getgenv)
+			if ok and type(environment) == 'table' then
+				table.insert(environments, environment)
+			end
+		end
+		if type(getfenv) == 'function' then
+			local ok, environment = pcall(getfenv, 0)
+			if ok and type(environment) == 'table' then
+				table.insert(environments, environment)
+			end
+		end
+		if type(_G) == 'table' then table.insert(environments, _G) end
+		if type(shared) == 'table' then table.insert(environments, shared) end
+		for _, environment in environments do
+			local store = rawget(environment, 'BadVapeStore')
+			if type(store) == 'table' then return store end
+		end
 	end
 
 	local function cancelWaterTask()
@@ -104,7 +135,9 @@ return function(vape, entitylib)
 		rootStableSince = 0
 		waterWorlds = nil
 		waterTeam = nil
-		waterCharacter = nil
+		waterBounds = nil
+		waterBoundsSampledAt = 0
+		waterBoundsSignature = nil
 		for _, object in newObjects do
 			if object and object.Parent then
 				object:Destroy()
@@ -133,6 +166,8 @@ return function(vape, entitylib)
 			currentCloud:Destroy()
 			currentCloud = nil
 		end
+
+		if restoreWorkspaceClouds then restoreWorkspaceClouds() end
 
 		if cleanFunc then
 			cleanFunc()
@@ -172,6 +207,12 @@ return function(vape, entitylib)
 		if workspace:FindFirstChild('Clouds') then
 			for _, object in workspace.Clouds:GetChildren() do
 				if object:IsA('Part') then
+					if not preservedCloudParts[object] then
+						preservedCloudParts[object] = {
+							Transparency = object.Transparency,
+							LocalTransparencyModifier = object.LocalTransparencyModifier,
+						}
+					end
 					object.Transparency = 1
 				end
 			end
@@ -179,7 +220,16 @@ return function(vape, entitylib)
 
 		for _, object in workspace:GetDescendants() do
 			if object:IsA('Clouds') then
-				object:Destroy()
+				if object ~= currentCloud and not preservedClouds[object] then
+					preservedClouds[object] = {
+						Parent = object.Parent,
+						Enabled = object.Enabled,
+						Cover = object.Cover,
+						Density = object.Density,
+						Color = object.Color,
+					}
+					pcall(function() object.Parent = game end)
+				end
 			end
 		end
 	end
@@ -188,14 +238,77 @@ return function(vape, entitylib)
 		if workspace:FindFirstChild('Clouds') then
 			for _, object in workspace.Clouds:GetChildren() do
 				if object:IsA('Part') then
+					if not preservedCloudParts[object] then
+						preservedCloudParts[object] = {
+							Transparency = object.Transparency,
+							LocalTransparencyModifier = object.LocalTransparencyModifier,
+						}
+					end
 					object.Transparency = 1
 				end
 			end
 		end
 	end
 
+	restoreWorkspaceClouds = function()
+		for object, state in preservedClouds do
+			if object then
+				pcall(function()
+					object.Enabled = state.Enabled
+					object.Cover = state.Cover
+					object.Density = state.Density
+					object.Color = state.Color
+					object.Parent = state.Parent
+				end)
+			end
+			preservedClouds[object] = nil
+		end
+		for object, state in preservedCloudParts do
+			if object then
+				pcall(function()
+					object.Transparency = state.Transparency
+					object.LocalTransparencyModifier = state.LocalTransparencyModifier
+				end)
+			end
+			preservedCloudParts[object] = nil
+		end
+	end
+
+	applyCloudRemovalState = function()
+		if not Theme or not Theme.Enabled then return end
+		if RemoveClouds and RemoveClouds.Enabled then
+			removeWorkspaceClouds()
+			hideWorkspaceCloudParts()
+		else
+			restoreWorkspaceClouds()
+		end
+	end
+
+	-- Roblox's Clouds object exposes Cover (how much of the sky is filled),
+	-- Density (opacity), and Color.  Keep the user-facing controls in the
+	-- more intuitive size/transparency terms and apply them to the one cloud
+	-- instance owned by Theme.  This also avoids the old weather coroutine
+	-- repeatedly overwriting the user's values.
+	local function applyCloudSettings()
+		if not currentCloud or not currentCloud.Parent then return end
+		local size = CloudSize and tonumber(CloudSize.Value) or 0.8
+		local transparency = CloudTransparency and tonumber(CloudTransparency.Value) or 0.1
+		local colorValue = CloudColor and Color3.fromHSV(
+			CloudColor.Hue,
+			CloudColor.Sat,
+			CloudColor.Value
+		) or Color3.new(1, 1, 1)
+		pcall(function()
+			currentCloud.Cover = math.clamp(size, 0, 1)
+			currentCloud.Density = 1 - math.clamp(transparency, 0, 1)
+			currentCloud.Color = colorValue
+		end)
+	end
+
 	local function applyBlavish()
-		removeWorkspaceClouds()
+		if RemoveClouds and RemoveClouds.Enabled then
+			removeWorkspaceClouds()
+		end
 		lightingService.ClockTime = 6.1
 
 		local sky = Instance.new('Sky')
@@ -311,7 +424,9 @@ return function(vape, entitylib)
 		depthOfField.Enabled = false
 		table.insert(newObjects, depthOfField)
 
-		removeWorkspaceClouds()
+		if RemoveClouds and RemoveClouds.Enabled then
+			removeWorkspaceClouds()
+		end
 
 		local terrain = workspace:FindFirstChildOfClass('Terrain')
 		if terrain then
@@ -330,26 +445,7 @@ return function(vape, entitylib)
 			currentCloud = Instance.new('Clouds', terrain)
 			currentCloud.Name = 'MadeCloud'
 			currentCloud.Enabled = true
-			currentCloud.Density = 0.9
-			currentCloud.Cover = 0.8
-			currentCloud.Color = Color3.new(1.1, 1.1, 1.1)
-
-			task.spawn(function()
-				local weatherStates = {
-					{Density = 0.6, Cover = 0.8},
-					{Density = 0.7, Cover = 0.9},
-					{Density = 0.6, Cover = 1},
-				}
-
-				while Theme.Enabled and currentCloud do
-					task.wait(math.random(15, 20))
-					if not Theme.Enabled or not currentCloud then
-						break
-					end
-
-					tweenService:Create(currentCloud, TweenInfo.new(10), weatherStates[math.random(1, #weatherStates)]):Play()
-				end
-			end)
+			applyCloudSettings()
 		end
 
 		if game.PlaceId ~= 6872265039 then
@@ -390,17 +486,102 @@ return function(vape, entitylib)
 						and activeEntity.character.RootPart or nil
 				end
 
+				local function getMapBounds(worlds)
+					local bounds = {
+						minX = math.huge,
+						maxX = -math.huge,
+						minZ = math.huge,
+						maxZ = -math.huge,
+						lowestSurfaceY = math.huge,
+						count = 0,
+					}
+
+					for _, block in storeBlocks do
+						if block and block.Parent and block:IsA('BasePart')
+							and block:IsDescendantOf(worlds) then
+							local position = block.Position
+							local halfSize = block.Size * 0.5
+							local cframe = block.CFrame
+							-- Account for rotated map pieces instead of assuming every
+							-- tagged block is axis-aligned.
+							local extentX = math.abs(cframe.RightVector.X) * halfSize.X
+								+ math.abs(cframe.UpVector.X) * halfSize.Y
+								+ math.abs(cframe.LookVector.X) * halfSize.Z
+							local extentY = math.abs(cframe.RightVector.Y) * halfSize.X
+								+ math.abs(cframe.UpVector.Y) * halfSize.Y
+								+ math.abs(cframe.LookVector.Y) * halfSize.Z
+							local extentZ = math.abs(cframe.RightVector.Z) * halfSize.X
+								+ math.abs(cframe.UpVector.Z) * halfSize.Y
+								+ math.abs(cframe.LookVector.Z) * halfSize.Z
+
+							bounds.minX = math.min(bounds.minX, position.X - extentX)
+							bounds.maxX = math.max(bounds.maxX, position.X + extentX)
+							bounds.minZ = math.min(bounds.minZ, position.Z - extentZ)
+							bounds.maxZ = math.max(bounds.maxZ, position.Z + extentZ)
+							-- The lowest top surface is the first safe level below
+							-- the loaded islands.  The match-state gate keeps lobby
+							-- skybox pieces out of this scan.
+							bounds.lowestSurfaceY = math.min(
+								bounds.lowestSurfaceY,
+								position.Y + extentY
+							)
+							bounds.count += 1
+						end
+					end
+
+					if bounds.count == 0 or bounds.minX == math.huge then
+						return nil
+					end
+
+					bounds.spanX = bounds.maxX - bounds.minX
+					bounds.spanZ = bounds.maxZ - bounds.minZ
+					bounds.centerX = (bounds.minX + bounds.maxX) * 0.5
+					bounds.centerZ = (bounds.minZ + bounds.maxZ) * 0.5
+					bounds.signature = string.format(
+						'%d:%d:%d:%d:%d:%d',
+						bounds.count,
+						math.floor(bounds.minX),
+						math.floor(bounds.maxX),
+						math.floor(bounds.minZ),
+						math.floor(bounds.maxZ),
+						math.floor(bounds.lowestSurfaceY)
+					)
+					return bounds
+				end
+
+				local function sampleMapBounds(worlds)
+					local now = tick()
+					if waterBounds and waterBoundsSampledAt > 0
+						and now - waterBoundsSampledAt < 0.5 then
+						return waterBounds
+					end
+					waterBounds = getMapBounds(worlds)
+					waterBoundsSampledAt = now
+					return waterBounds
+				end
+
 				local function mapReady(root)
-					-- Do not sample the lobby/skybox. BedWars can publish a Map object
-					-- before the player is teleported into the live Worlds model, so
-					-- require a non-zero team and nearby replicated map geometry for a
-					-- short stable window before creating any terrain water.  Do not use
-					-- player movement as an invalidation signal: the old implementation
-					-- cleared and refilled a 5000x5000 terrain region every ~24 studs.
+					-- BedWars creates the lobby avatar and skybox map before it
+					-- transitions the store into a live match.  Waiting for the
+					-- authoritative match state prevents water from being placed at
+					-- the temporary spawn position.
+					local runtimeStore = getRuntimeStore()
+					if not runtimeStore or tonumber(runtimeStore.matchState) ~= 1 then
+						if waterRegion then clearWaterRegion() end
+						waterWorlds = nil
+						waterTeam = nil
+						waterBounds = nil
+						waterBoundsSampledAt = 0
+						waterBoundsSignature = nil
+						mapReadySince = 0
+						rootStableSince = 0
+						return false
+					end
 					if not root or not root.Parent then
 						mapReadySince = 0
 						return false
 					end
+
 					local mapRoot = workspace:FindFirstChild('Map')
 					local worlds = mapRoot and mapRoot:FindFirstChild('Worlds')
 					local team = localPlayer:GetAttribute('Team')
@@ -409,95 +590,73 @@ return function(vape, entitylib)
 						if waterRegion then clearWaterRegion() end
 						waterWorlds = nil
 						waterTeam = nil
-						waterCharacter = nil
+						waterBounds = nil
+						waterBoundsSampledAt = 0
+						waterBoundsSignature = nil
 						mapReadySince = 0
 						rootStableSince = 0
 						return false
 					end
 
-					-- A new Worlds model, team, or character represents a real map
-					-- transition.  Only those transitions are allowed to invalidate the
-					-- water plane; walking, jumping, and ordinary knockback are not.
-					local character = root.Parent
-					if waterWorlds ~= worlds or waterTeam ~= team or waterCharacter ~= character then
-						if waterRegion then
-							clearWaterRegion()
-						end
+					-- A new Worlds model or team is a real map transition.  A
+					-- respawn is deliberately not part of this check, so ordinary
+					-- CharacterAdded events never clear/refill the water plane.
+					if waterWorlds ~= worlds or waterTeam ~= team then
+						if waterRegion then clearWaterRegion() end
 						waterWorlds = worlds
 						waterTeam = team
-						waterCharacter = character
+						waterBounds = nil
+						waterBoundsSampledAt = 0
+						waterBoundsSignature = nil
 						mapReadySince = 0
 						rootStableSince = tick()
-					end
-
-					-- Once the first plane is installed, the map has already been
-					-- validated.  Avoid rescanning every tagged block on a timer.
-					if waterRegion then
+					elseif waterRegion then
+						-- The plane is intentionally immutable after the first
+						-- successful fill.  Respawns and transient character/store
+						-- changes must not recreate it, but match/map transitions
+						-- above have already invalidated the old region.
 						return true
 					end
+
 					if rootStableSince == 0 then rootStableSince = tick() end
-					local nearby = false
-					for _, block in storeBlocks do
-						if block and block.Parent and block:IsA('BasePart')
-							and block:IsDescendantOf(worlds)
-							and (Vector3.new(block.Position.X, 0, block.Position.Z)
-								- Vector3.new(root.Position.X, 0, root.Position.Z)).Magnitude <= 350
-							and math.abs(block.Position.Y - root.Position.Y) <= 300 then
-							nearby = true
-							break
-						end
-					end
-					if not nearby then
+
+					local bounds = sampleMapBounds(worlds)
+					if not bounds or bounds.count < 8
+						or math.max(bounds.spanX, bounds.spanZ) < 64 then
 						mapReadySince = 0
 						return false
 					end
-					if mapReadySince == 0 then mapReadySince = tick() end
-					return tick() - mapReadySince >= 1 and tick() - rootStableSince >= 0.75
-				end
 
-				local function findSafeWaterY(root, ready)
-					if not root or (not ready and not mapReady(root)) then return end
-					local rootPosition = root.Position
-					local mapRoot = workspace:FindFirstChild('Map')
-					local worlds = mapRoot and mapRoot:FindFirstChild('Worlds')
-					local lowest = math.huge
-					for _, block in storeBlocks do
-						if block and block.Parent and block:IsA('BasePart')
-							and worlds and block:IsDescendantOf(worlds) then
-							local position = block.Position
-							-- Ignore geometry far from the live character and never accept
-							-- a surface above the current character.
-							if math.abs(position.X - rootPosition.X) > 350
-								or math.abs(position.Z - rootPosition.Z) > 350 then
-								continue
-							end
-							-- Ignore lobby/skybox geometry and never accept a surface
-							-- which is at or above the current character.
-							if position.Y < rootPosition.Y - 4 then
-								lowest = math.min(lowest, position.Y)
-							end
-						end
+					local now = tick()
+					if waterBoundsSignature ~= bounds.signature then
+						waterBoundsSignature = bounds.signature
+						mapReadySince = now
+					elseif mapReadySince == 0 then
+						mapReadySince = now
 					end
-					if lowest == math.huge then return end
-					-- Keep a generous vertical gap below the player even if a stale
-					-- lobby block was present during the initial load.  Terrain voxels
-					-- are four studs tall, so the top of the fill is kept at least 16
-					-- studs below the current root.
-					local safeY = math.min(lowest - 4, rootPosition.Y - 16)
-					return safeY <= rootPosition.Y - 16 and safeY or nil
+					return now - mapReadySince >= 1 and now - rootStableSince >= 0.75
 				end
 
-				local function fillSafeWater(root, waterY)
+				local function findSafeWaterY(root, bounds)
+					if not root or not bounds then return end
+					-- Keep the terrain voxel below the lowest live map surface and
+					-- below the current root even if the map has uneven islands.
+					return math.min(bounds.lowestSurfaceY - 4, root.Position.Y - 16)
+				end
+
+				local function fillSafeWater(bounds, waterY)
 					local terrain = workspace:FindFirstChildOfClass('Terrain')
-					if not terrain or not root or not waterY then return end
-					if waterY >= root.Position.Y - 16 then return end
+					if not terrain or not bounds or not waterY then return end
 					local region = {
-						CFrame = CFrame.new(root.Position.X, waterY - 2, root.Position.Z),
-						Size = Vector3.new(waterPlaneSize, 4, waterPlaneSize),
+						CFrame = CFrame.new(bounds.centerX, waterY, bounds.centerZ),
+						-- Keep the historical thin water sheet.  Terrain rounds this
+						-- to its voxel grid; a four-stud volume wastes memory without
+						-- changing the visible surface.
+						Size = Vector3.new(waterPlaneSize, 0.01, waterPlaneSize),
 						TopY = waterY,
+						SizeStuds = waterPlaneSize,
 						Worlds = waterWorlds,
 						Team = waterTeam,
-						Character = waterCharacter,
 					}
 					local ok = pcall(function()
 						terrain:FillBlock(region.CFrame, region.Size, Enum.Material.Water)
@@ -513,19 +672,16 @@ return function(vape, entitylib)
 				cancelWaterTask()
 				local generation = waterGeneration
 				waterTask = task.spawn(function()
-					while Theme.Enabled and generation == waterGeneration do
+					while Theme.Enabled and generation == waterGeneration and not waterRegion do
 						local root = getRoot()
 						local ready = root and mapReady(root)
-						-- The water plane is a visual backdrop, not a player-following
-						-- object.  Never clear/refill it because the player walked outside
-						-- its bounds: doing so turns ordinary movement into a large terrain
-						-- allocation and was the source of the Realistic-mode hitch/crash.
 						if root and ready and not waterRegion then
-							local waterY = findSafeWaterY(root, true)
-							if waterY then fillSafeWater(root, waterY) end
+							local waterY = findSafeWaterY(root, waterBounds)
+							if waterY then fillSafeWater(waterBounds, waterY) end
 						end
-						task.wait(waterRegion and 2 or 0.25)
+						if not waterRegion then task.wait(0.25) end
 					end
+					if generation == waterGeneration then waterTask = nil end
 				end)
 
 				local activeEntity = getEntityLibrary()
@@ -536,25 +692,15 @@ return function(vape, entitylib)
 
 				characterConnection = localPlayer.CharacterAdded:Connect(function(character)
 					if not Theme.Enabled then return end
-					mapReadySince = 0
-					rootStableSince = 0
-					-- Leave the existing plane in place during a respawn.  The next
-					-- valid root is tracked as a character transition by mapReady and
-					-- clears it once, instead of doing duplicate 5000x5000 fills here.
-					waterCharacter = nil
 					local humanoid = character:WaitForChild('Humanoid', 10)
 					if humanoid then
 						humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
 					end
-					-- The first character is often the lobby avatar.  The monitor above
-					-- recalculates after the server teleports the new avatar to its base.
 				end)
 			end)
 		end
 
-		if RemoveClouds.Enabled then
-			hideWorkspaceCloudParts()
-		end
+		if applyCloudRemovalState then applyCloudRemovalState() end
 	end
 
 	Theme = vape.Categories.Render:CreateModule({
@@ -606,12 +752,35 @@ return function(vape, entitylib)
 	RemoveClouds = Theme:CreateToggle({
 		Name = 'Remove Clouds',
 		Function = function()
-			if Theme.Enabled then
-				Theme:Toggle()
-				Theme:Toggle()
-			end
+			if applyCloudRemovalState then applyCloudRemovalState() end
 		end,
 		Default = true,
+	})
+
+	CloudSize = Theme:CreateSlider({
+		Name = 'Cloud size',
+		Min = 0,
+		Max = 1,
+		Decimal = 100,
+		Default = 0.8,
+		Suffix = '',
+		Function = applyCloudSettings,
+	})
+
+	CloudTransparency = Theme:CreateSlider({
+		Name = 'Cloud transparency',
+		Min = 0,
+		Max = 1,
+		Decimal = 100,
+		Default = 0.1,
+		Suffix = '',
+		Function = applyCloudSettings,
+	})
+
+	CloudColor = Theme:CreateColorSlider({
+		Name = 'Cloud color',
+		Color = Color3.new(1, 1, 1),
+		Function = applyCloudSettings,
 	})
 
 	vape.Libraries.badvapeTheme = Theme

@@ -416,23 +416,57 @@ if shared.BadVapeDeveloper and getrawmetatable and setreadonly and getnamecallme
 	end)
 end
 
--- Some executors report IsLoaded=false forever when injected after the client
--- is usable. Prefer a ready PlayerGui and keep both waits bounded.
+-- Queue-on-teleport can enter this runtime before the destination place has
+-- finished mounting. Require the full basic client tree and FloodCraft's own
+-- client bootstrap marker before any modules run.
+local floodCraftPlaces = {
+	[6872265039] = true,
+	[6872274481] = true,
+	[8444591321] = true,
+	[8560631822] = true,
+}
+
+local function floodCraftClientReady()
+	local placeId = tonumber(game.PlaceId)
+	if not floodCraftPlaces[placeId] then
+		return true
+	end
+
+	local workspaceService = game:GetService('Workspace')
+	local marker = workspaceService:FindFirstChild('ClientFlameReady')
+	return marker ~= nil
+		and (type(marker.IsA) ~= 'function' or marker:IsA('BoolValue'))
+		and marker.Value == true
+end
+
 local function runtimeClock()
 	if type(tick) == 'function' then return tick() end
 	if type(os) == 'table' and type(os.clock) == 'function' then return os.clock() end
 	return 0
 end
 
-local readyDeadline = runtimeClock() + 15
+local readyDeadline = runtimeClock() + 45
+local runtimeReady = false
 while runtimeClock() < readyDeadline do
 	local ready = false
 	pcall(function()
+		local localPlayer = playersService.LocalPlayer
 		ready = game:IsLoaded()
-			or (playersService.LocalPlayer and playersService.LocalPlayer:FindFirstChild('PlayerGui') ~= nil)
+			and localPlayer ~= nil
+			and localPlayer:FindFirstChild('PlayerGui') ~= nil
+			and localPlayer:FindFirstChild('PlayerScripts') ~= nil
+			and floodCraftClientReady()
 	end)
-	if ready then break end
+	if ready then
+		runtimeReady = true
+		break
+	end
 	task.wait()
+end
+
+if not runtimeReady then
+	restoreRuntimeEnvironment()
+	error('BadVape destination place did not finish loading', 0)
 end
 
 local function waitForLocalPlayer()

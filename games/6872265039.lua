@@ -10,21 +10,67 @@ local vape = shared.BadVape
 local entitylib = vape.Libraries.entity
 local sessioninfo = vape.Libraries.sessioninfo
 local bedwars = {}
+local Knit
 
 local function notif(...)
 	return vape:CreateNotification(...)
 end
 
-run(function()
-	local KnitInit, Knit
+local function waitForKnitClient()
+	local deadline = os.clock() + 12
+	local knitError
 	repeat
-		KnitInit, Knit = pcall(function() return debug.getupvalue(require(lplr.PlayerScripts.TS.knit).setup, 9) end)
-		if KnitInit then break end
+		local success, result = pcall(function()
+			return require(replicatedStorage.rbxts_include.node_modules['@easy-games'].knit.src).KnitClient
+		end)
+		if success and type(result) == 'table' then
+			Knit = result
+			break
+		end
+		knitError = result
+		if os.clock() >= deadline then
+			return false, knitError
+		end
 		task.wait()
-	until KnitInit
-	if not debug.getupvalue(Knit.Start, 1) then
-		repeat task.wait() until debug.getupvalue(Knit.Start, 1)
+	until Knit
+
+	local startOk, startResult = pcall(function()
+		if type(Knit.OnStart) == 'function' then
+			local promise = Knit:OnStart()
+			if promise and type(promise.timeout) == 'function' and type(promise.await) == 'function' then
+				return select(1, promise:timeout(math.max(0, deadline - os.clock())):await())
+			end
+		end
+
+		-- Compatibility for older FloodCraft snapshots that do not expose
+		-- OnStart. Keep this fallback bounded; it must not block teleport setup.
+		if type(debug) == 'table' and type(debug.getupvalue) == 'function'
+			and type(Knit.Start) == 'function' then
+			repeat
+				local started = debug.getupvalue(Knit.Start, 1)
+				if started then return true end
+				if os.clock() >= deadline then return false end
+				task.wait()
+			until false
+		end
+
+		-- A few legacy builds only expose the controller table. Do not claim
+		-- readiness until at least one controller has been registered.
+		return type(Knit.Controllers) == 'table' and next(Knit.Controllers) ~= nil
+	end)
+
+	return startOk and startResult == true, startResult
+end
+
+local knitReady, knitError = waitForKnitClient()
+if not knitReady then
+	if shared.BadVapeDeveloper then
+		warn('[BadVape] Lobby KnitClient did not finish startup: '..tostring(knitError))
 	end
+	return false
+end
+
+local initialized, initializationError = pcall(function()
 	local Flamework = require(replicatedStorage['rbxts_include']['node_modules']['@flamework'].core.out).Flamework
 	local Client = require(replicatedStorage.TS.remotes).default.Client
 
@@ -50,6 +96,12 @@ run(function()
 		table.clear(bedwars)
 	end)
 end)
+if not initialized then
+	if shared.BadVapeDeveloper then
+		warn('[BadVape] Lobby controller initialization failed: '..tostring(initializationError))
+	end
+	return false
+end
 
 for i, v in vape.Modules do
 	if v.Category == 'Combat' or v.Category == 'Minigames' then
