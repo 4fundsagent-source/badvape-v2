@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-801bc0d93cc95d62d8120e55ae86b1a4fb080e61e202d5b361a3dfe9eb6a358b",
+  "revision": "sha256-a8123884857d6668bf1bcb377f1df5d7592b739430aaf7408b3b020159b5036d",
   "files": [
     {
       "path": "bootstrap.lua",
@@ -159,8 +159,8 @@
     },
     {
       "path": "guis/new.lua",
-      "bytes": 285736,
-      "sha256": "12393fb99785bbd42ba95765ed9e365168a30ee83790769e25a70801d76262ad"
+      "bytes": 286993,
+      "sha256": "9d43c88f22eb4958622153fb6642d0af7e1cf9140b378928389829d51652f698"
     },
     {
       "path": "guis/old.lua",

@@ -5044,6 +5044,9 @@ function mainapi:CreateSearch()
 	children.ScrollBarThickness = 2
 	children.ScrollBarImageTransparency = 0.75
 	children.CanvasSize = UDim2.new()
+	-- ZIndexBehavior is Global, so descendants do not inherit the search
+	-- surface's ZIndex.  Keep the result layer above the rest of the click GUI.
+	children.ZIndex = 101
 	children.Parent = searchbkg
 	local divider = Instance.new('Frame')
 	divider.Name = 'Divider'
@@ -5053,6 +5056,7 @@ function mainapi:CreateSearch()
 	divider.BackgroundTransparency = 0.928
 	divider.BorderSizePixel = 0
 	divider.Visible = false
+	divider.ZIndex = 101
 	divider.Parent = searchbkg
 	local windowlist = Instance.new('UIListLayout')
 	windowlist.SortOrder = Enum.SortOrder.LayoutOrder
@@ -5073,12 +5077,28 @@ function mainapi:CreateSearch()
 				v:Destroy()
 			end
 		end
-		if search.Text == '' then return end
+		children.Visible = search.Text ~= ''
+		if search.Text == '' then
+			children.CanvasSize = UDim2.new()
+			searchbkg.Size = UDim2.fromOffset(220, 37)
+			return
+		end
 
 		for i, v in self.Modules do
-			if i:lower():find(search.Text:lower()) then
+			if type(i) == 'string' and v and v.Object and v.Object.Parent
+				and i:lower():find(search.Text:lower(), 1, true) then
 				local button = v.Object:Clone()
-				button.Bind:Destroy()
+				button.Visible = true
+				button.Active = true
+				button.Selectable = true
+				button.ZIndex = 102
+				local bind = button:FindFirstChild('Bind')
+				if bind then bind:Destroy() end
+				for _, descendant in button:GetDescendants() do
+					if descendant:IsA('GuiObject') then
+						descendant.ZIndex = 102
+					end
+				end
 				button.MouseButton1Click:Connect(function()
 					v:Toggle()
 				end)
@@ -5104,13 +5124,25 @@ function mainapi:CreateSearch()
 				task.spawn(function()
 					repeat
 						for _, v2 in {'Text', 'TextColor3', 'BackgroundColor3'} do
-							button[v2] = v.Object[v2]
+							if button[v2] ~= nil and v.Object[v2] ~= nil then
+								button[v2] = v.Object[v2]
+							end
 						end
-						button.UIGradient.Color = v.Object.UIGradient.Color
-						button.UIGradient.Enabled = v.Object.UIGradient.Enabled
-						button.Dots.Dots.ImageColor3 = v.Object.Dots.Dots.ImageColor3
+						local gradient = button:FindFirstChildOfClass('UIGradient')
+						local sourceGradient = v.Object:FindFirstChildOfClass('UIGradient')
+						if gradient and sourceGradient then
+							gradient.Color = sourceGradient.Color
+							gradient.Enabled = sourceGradient.Enabled
+						end
+						local dots = button:FindFirstChild('Dots')
+						local sourceDots = v.Object:FindFirstChild('Dots')
+						local dotImage = dots and dots:FindFirstChild('Dots')
+						local sourceDotImage = sourceDots and sourceDots:FindFirstChild('Dots')
+						if dotImage and sourceDotImage then
+							dotImage.ImageColor3 = sourceDotImage.ImageColor3
+						end
 						task.wait()
-					until not button.Parent
+					until not button.Parent or not v.Object or not v.Object.Parent
 				end)
 			end
 		end
