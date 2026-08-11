@@ -354,13 +354,18 @@ entitylib.removeEntity = function(char, localcheck)
 		-- match, always detach and replace it, even if isAlive was already false:
 		-- team changes restart the entity tracker and otherwise leave a dead
 		-- record that blocks addEntity() as a duplicate.
-		if current and (not char or current.Character == char) then
+		if type(current) == 'table' and (not char or current.Character == char) then
 			local wasAlive = entitylib.isAlive
 			entitylib.isAlive = false
-			for _, v in current.Connections do
-				v:Disconnect()
+			local connections = current.Connections
+			if type(connections) == 'table' then
+				for _, v in connections do
+					if v and v.Disconnect then
+						v:Disconnect()
+					end
+				end
+				table.clear(connections)
 			end
-			table.clear(current.Connections)
 			if wasAlive then
 				entitylib.Events.LocalRemoved:Fire(current)
 			end
