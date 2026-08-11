@@ -311,6 +311,19 @@ local function loadJson(path)
 	return suc and type(res) == 'table' and res or nil
 end
 
+-- Profile files are user-owned and can outlive the schema that produced them.
+-- Normalize collections before iterating so a partially-written/older profile
+-- cannot prevent the compatibility GUI from starting.
+local function profileTable(value)
+	return type(value) == 'table' and value or {}
+end
+
+local function profileVector(value)
+	if type(value) ~= 'table' then return nil end
+	local x, y = tonumber(value.X), tonumber(value.Y)
+	return x and y and {X = x, Y = y} or nil
+end
+
 local function makeDraggable(gui, window)
 	gui.InputBegan:Connect(function(inputObj)
 		if window and not window.Visible then return end
@@ -3181,10 +3194,14 @@ function mainapi:Load(skipgui, profile)
 			self:CreateNotification('BadVape', 'Failed to load GUI settings.', 10, 'alert')
 			savecheck = false
 		end
+		guidata.Categories = profileTable(guidata.Categories)
+		guidata.Profiles = profileTable(guidata.Profiles)
+		guidata.Keybind = type(guidata.Keybind) == 'table' and guidata.Keybind or self.Keybind
 
 		if not skipgui then
 			self.Keybind = guidata.Keybind
 			for i, v in guidata.Categories do
+				if type(v) ~= 'table' then continue end
 				local object = self.Categories[i]
 				if not object then continue end
 				if object.Options and v.Options then
@@ -3199,20 +3216,23 @@ function mainapi:Load(skipgui, profile)
 				if v.Expanded then
 					object:Expand()
 				end
-				if v.List and (#object.List > 0 or #v.List > 0) then
-					object.List = v.List or {}
-					object.ListEnabled = v.ListEnabled or {}
+				local savedList = type(v.List) == 'table' and v.List or nil
+				local currentList = type(object.List) == 'table' and object.List or nil
+				if savedList and (not currentList or #currentList > 0 or #savedList > 0) then
+					object.List = savedList
+					object.ListEnabled = profileTable(v.ListEnabled)
 					object:ChangeValue()
 				end
-				if v.Position and i ~= 'TopBar' then
-					object.Object.Position = UDim2.fromOffset(v.Position.X, v.Position.Y)
+				local position = profileVector(v.Position)
+				if position and i ~= 'TopBar' and object.Object then
+					object.Object.Position = UDim2.fromOffset(position.X, position.Y)
 				end
 			end
 		end
 	end
 
 	self.Profile = profile or guidata.Profile or 'default'
-	self.Profiles = guidata.Profiles or {{
+	self.Profiles = type(guidata.Profiles) == 'table' and #guidata.Profiles > 0 and guidata.Profiles or {{
 		Name = 'default',
 		Bind = {}
 	}}
@@ -3229,8 +3249,12 @@ function mainapi:Load(skipgui, profile)
 			self:CreateNotification('BadVape', 'Failed to load '..self.Profile..' profile.', 10, 'alert')
 			savecheck = false
 		end
+		savedata.Categories = profileTable(savedata.Categories)
+		savedata.Modules = profileTable(savedata.Modules)
+		savedata.Legit = profileTable(savedata.Legit)
 
 		for i, v in savedata.Categories do
+			if type(v) ~= 'table' then continue end
 			local object = self.Categories[i]
 			if not object then continue end
 			if object.Options and v.Options then
@@ -3245,15 +3269,21 @@ function mainapi:Load(skipgui, profile)
 			if object.Button and (v.Enabled or false) ~= object.Button.Enabled then
 				object.Button:Toggle()
 			end
-			if v.List and (#object.List > 0 or #v.List > 0) then
-				object.List = v.List or {}
-				object.ListEnabled = v.ListEnabled or {}
+			local savedList = type(v.List) == 'table' and v.List or nil
+			local currentList = type(object.List) == 'table' and object.List or nil
+			if savedList and (not currentList or #currentList > 0 or #savedList > 0) then
+				object.List = savedList
+				object.ListEnabled = profileTable(v.ListEnabled)
 				object:ChangeValue()
 			end
-			object.Object.Position = UDim2.fromOffset(v.Position.X, v.Position.Y)
+			local position = profileVector(v.Position)
+			if position and object.Object then
+				object.Object.Position = UDim2.fromOffset(position.X, position.Y)
+			end
 		end
 
 		for i, v in savedata.Modules do
+			if type(v) ~= 'table' then continue end
 			local resolvedName = resolveModuleName(self.Modules, i)
 			local object = self.Modules[resolvedName]
 			local legitObject
@@ -3272,10 +3302,11 @@ function mainapi:Load(skipgui, profile)
 				end
 				if legitObject then object:Toggle() else object:Toggle(true) end
 			end
-			if not legitObject then object:SetBind(v.Bind) end
+			if not legitObject then object:SetBind(type(v.Bind) == 'table' and v.Bind or {}) end
 		end
 
 		for i, v in savedata.Legit do
+			if type(v) ~= 'table' then continue end
 			local object = self.Legit.Modules[i]
 			if not object then continue end
 			if object.Options and v.Options then
@@ -3284,8 +3315,9 @@ function mainapi:Load(skipgui, profile)
 			if object.Enabled ~= v.Enabled then
 				object:Toggle()
 			end
-			if v.Position and object.Children then
-				object.Children.Position = UDim2.fromOffset(v.Position.X, v.Position.Y)
+			local position = profileVector(v.Position)
+			if position and object.Children then
+				object.Children.Position = UDim2.fromOffset(position.X, position.Y)
 			end
 		end
 
@@ -3335,10 +3367,15 @@ function mainapi:Load(skipgui, profile)
 end
 
 function mainapi:LoadOptions(object, savedoptions)
+	if type(object) ~= 'table' or type(object.Options) ~= 'table' or type(savedoptions) ~= 'table' then
+		return
+	end
 	for i, v in savedoptions do
 		local option = object.Options[i]
 		if not option then continue end
-		option:Load(v)
+		if type(option.Load) == 'function' then
+			pcall(option.Load, option, v)
+		end
 	end
 end
 
