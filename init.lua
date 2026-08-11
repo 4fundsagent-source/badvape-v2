@@ -453,13 +453,10 @@ local function runCachedRuntime()
 	return table.unpack(runtimeResult, 2, runtimeResult.n)
 end
 
+-- Only an explicit developer flag may select the local workspace.  Public
+-- installs can retain `profiles/commit.txt=local` from older versions; that
+-- marker is not an authorization signal and must not bypass manifest repair.
 local localWorkspace = shared.BadVapeDeveloper == true and safeIsFile(folder..'/os.luau')
-if not localWorkspace and safeIsFile(folder..'/profiles/commit.txt') then
-	local markerOk, marker = pcall(readfile, folder..'/profiles/commit.txt')
-	localWorkspace = markerOk
-		and type(marker) == 'string'
-		and marker:match('^%s*(.-)%s*$') == 'local'
-end
 if localWorkspace then
 	diagnostics.record('installer_local_workspace', {folder = folder})
 	return runCachedRuntime()
