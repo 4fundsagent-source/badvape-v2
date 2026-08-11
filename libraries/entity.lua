@@ -348,14 +348,25 @@ end
 
 entitylib.removeEntity = function(char, localcheck)
 	if localcheck then
-		if entitylib.isAlive then
+		local current = entitylib.character
+		-- Ignore a late CharacterRemoving signal for an old rig after a new
+		-- character has already been registered.  When the current record does
+		-- match, always detach and replace it, even if isAlive was already false:
+		-- team changes restart the entity tracker and otherwise leave a dead
+		-- record that blocks addEntity() as a duplicate.
+		if current and (not char or current.Character == char) then
+			local wasAlive = entitylib.isAlive
 			entitylib.isAlive = false
-			for _, v in entitylib.character.Connections do
+			for _, v in current.Connections do
 				v:Disconnect()
 			end
-			table.clear(entitylib.character.Connections)
-			entitylib.Events.LocalRemoved:Fire(entitylib.character)
-			--table.clear(entitylib.character)
+			table.clear(current.Connections)
+			if wasAlive then
+				entitylib.Events.LocalRemoved:Fire(current)
+			end
+			if entitylib.character == current then
+				entitylib.character = {}
+			end
 		end
 		return
 	end
@@ -379,7 +390,7 @@ entitylib.removeEntity = function(char, localcheck)
 end
 
 entitylib.refreshEntity = function(char, plr)
-	entitylib.removeEntity(char)
+	entitylib.removeEntity(char, plr == lplr)
 	entitylib.addEntity(char, plr)
 end
 
