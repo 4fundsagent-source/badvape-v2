@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-5e584bb72bec0c620351a62f582a3492cc3fa12b08e1917e9b5be3a44b6136cf",
+  "revision": "sha256-3938ce9964a654f1f533ac0caf7c2b6b1322a815c06db2b6f7a4f9049fe1cb5a",
   "files": [
     {
       "path": "bootstrap.lua",
@@ -239,8 +239,8 @@
     },
     {
       "path": "profiles/2619619496.gui.txt",
-      "bytes": 1424,
-      "sha256": "fa03666a6109422c3b9b838628d1eadc822e3220f88b6993c10fa8250953ed5b"
+      "bytes": 1423,
+      "sha256": "383dcabebefb97f42ccdcab6e748ce495586c9c52bf96328c335a144ec14db9f"
     },
     {
       "path": "profiles/blatant6872265039.txt",
@@ -249,8 +249,8 @@
     },
     {
       "path": "profiles/blatant6872274481.txt",
-      "bytes": 52474,
-      "sha256": "17db8763e81c6eb4f3fea8d72752b1d03ea475e330db79a1aba02c0ce4989615"
+      "bytes": 37906,
+      "sha256": "a68a2f864bd02492325a247cb961b65c73e5e62fee228cffad20ffee17db627a"
     },
     {
       "path": "profiles/default117398147513099.txt",
