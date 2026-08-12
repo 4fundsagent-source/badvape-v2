@@ -1383,15 +1383,32 @@ local function loadGameModule(placeId)
 	-- default for the concrete mode (or its closest pre-existing mode alias).
 	if rivalsProfilePlace then vape.Place = rivalsProfilePlace end
 	local ok, loaded = table.unpack(results, 1, results.n)
-	if not ok or loaded == false then
+	local bedwarsRoute = luaProtRoute and luaProtRoute.productMarker == 'B'
+	local deferred = ok and loaded == 'deferred'
+	if deferred then
+		recordDiagnostic('game_module_deferred', {
+			path = gamePath,
+			placeId = placeId,
+			reason = 'destination is not a game server',
+		})
+		return false
+	end
+	-- BedWars must opt in explicitly after its complete bootstrap.  Other
+	-- protected products retain their historical return contract for now.
+	if not ok or loaded == false or (bedwarsRoute and loaded ~= true) then
 		local protectedFailure = type(shared.BadVapeProtectedFailure) == 'table'
 			and shared.BadVapeProtectedFailure or nil
+		local bootstrapFailure = type(shared.BadVapeBedwarsBootstrapFailure) == 'table'
+			and shared.BadVapeBedwarsBootstrapFailure or nil
 		local detail = not ok and tostring(loaded) or 'module returned false'
 		if protectedFailure then
 			detail = 'stage='..tostring(protectedFailure.stage or 'unknown')
 				..(protectedFailure.status and ' status='..tostring(protectedFailure.status) or '')
 				..(protectedFailure.correlationId and ' reference='..tostring(protectedFailure.correlationId) or '')
 				..(protectedFailure.detail and ' '..tostring(protectedFailure.detail) or '')
+		elseif bootstrapFailure then
+			detail = 'stage='..tostring(bootstrapFailure.stage or 'bedwars-bootstrap')
+				..(bootstrapFailure.detail and ' '..tostring(bootstrapFailure.detail) or '')
 		end
 		recordDiagnostic('game_module_failed', {
 			correlationId = protectedFailure and protectedFailure.correlationId or 'none',
@@ -1415,6 +1432,9 @@ local function loadGameModule(placeId)
 				15,
 				'warning'
 			)
+		end
+		if shared.BadVapeBedwarsBootstrapFailure == bootstrapFailure then
+			shared.BadVapeBedwarsBootstrapFailure = nil
 		end
 		return false
 	end

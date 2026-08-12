@@ -10,6 +10,20 @@ local function isZero(d)
 	return (d > -eps and d < eps)
 end
 
+local function finiteScalar(value)
+	return type(value) == 'number' and value == value and value > -math.huge and value < math.huge
+end
+
+local function appendRoot(roots, value)
+	if not finiteScalar(value) then return end
+	for _, existing in roots do
+		if math.abs(existing - value) <= 1e-7 * math.max(1, math.abs(value), math.abs(existing)) then
+			return
+		end
+	end
+	table.insert(roots, value)
+end
+
 local tracer = Instance.new('Part')
 tracer.Anchored = true
 tracer.CanCollide = false
@@ -23,29 +37,58 @@ end
 
 local function solveQuadric(c0, c1, c2)
 	local s0, s1
-
-	local p, q, D
-
-	p = c1 / (2 * c0)
-	q = c2 / c0
-	D = p * p - q
-
-	if isZero(D) then
-		s0 = -p
-		return s0
-	elseif (D < 0) then
-		return
-	else -- if (D > 0)
-		local sqrt_D = math.sqrt(D)
-
-		s0 = sqrt_D - p
-		s1 = -sqrt_D - p
-		return s0, s1
+	if not finiteScalar(c0) or not finiteScalar(c1) or not finiteScalar(c2) then return end
+	-- Treat the leading coefficient relative to the polynomial scale.  The
+	-- interception coefficients can be very small when the target is close,
+	-- and an absolute zero check there turns a valid quadratic into a bogus
+	-- linear solve.
+	local scale = math.max(math.abs(c0), math.abs(c1), math.abs(c2))
+	if scale <= 0 then return end
+	local leadingEpsilon = eps * scale
+	if math.abs(c0) <= leadingEpsilon then
+		if math.abs(c1) <= leadingEpsilon then return end
+		return -c2 / c1
 	end
+
+	-- Use the stable quadratic formula.  Computing (-b +/- sqrt(D))/(2a)
+	-- directly loses the smaller root when b and sqrt(D) nearly cancel; that
+	-- is a common source of late/early aim errors on moving targets.
+	local discriminant = c1 * c1 - 4 * c0 * c2
+	local discriminantEpsilon = eps * math.max(c1 * c1, math.abs(4 * c0 * c2), eps * eps)
+	if discriminant < 0 and discriminant > -discriminantEpsilon then
+		discriminant = 0
+	end
+	if discriminant < 0 then return end
+
+	if discriminant == 0 then
+		s0 = -c1 / (2 * c0)
+		return s0
+	end
+
+	local sqrtDiscriminant = math.sqrt(discriminant)
+	local q = -0.5 * (c1 + (c1 >= 0 and sqrtDiscriminant or -sqrtDiscriminant))
+	if math.abs(q) <= leadingEpsilon then
+		-- This is only reachable for extreme underflow/cancellation.  The
+		-- repeated-root expression is preferable to returning an invalid root.
+		return -c1 / (2 * c0)
+	end
+	s0 = q / c0
+	s1 = c2 / q
+	return s0, s1
 end
 
 local function solveCubic(c0, c1, c2, c3)
 	local s0, s1, s2
+	if not finiteScalar(c0) or not finiteScalar(c1) or not finiteScalar(c2) or not finiteScalar(c3) then return end
+	if isZero(c0) then
+		return solveQuadric(c1, c2, c3)
+	end
+
+	-- Normalize before applying Cardano.  Interception coefficients can span
+	-- several orders of magnitude when the target is far away or accelerating.
+	local scale = math.max(math.abs(c0), math.abs(c1), math.abs(c2), math.abs(c3))
+	if scale <= 0 then return end
+	c0, c1, c2, c3 = c0 / scale, c1 / scale, c2 / scale, c3 / scale
 
 	local num, sub
 	local A, B, C
@@ -74,7 +117,8 @@ local function solveCubic(c0, c1, c2, c3)
 			num = 2
 		end
 	elseif (D < 0) then -- Casus irreducibilis: three real solutions
-		local phi = (1 / 3) * math.acos(-q / math.sqrt(-cb_p))
+		local cosine = -q / math.sqrt(-cb_p)
+		local phi = (1 / 3) * math.acos(math.clamp(cosine, -1, 1))
 		local t = 2 * math.sqrt(-p)
 
 		s0 = t * math.cos(phi)
@@ -101,6 +145,30 @@ end
 
 function module.solveQuartic(c0, c1, c2, c3, c4)
 	local s0, s1, s2, s3
+	if not finiteScalar(c0) or not finiteScalar(c1) or not finiteScalar(c2)
+		or not finiteScalar(c3) or not finiteScalar(c4) then return end
+	local scale = math.max(math.abs(c0), math.abs(c1), math.abs(c2), math.abs(c3), math.abs(c4))
+	if scale <= 0 then return end
+	c0, c1, c2, c3, c4 = c0 / scale, c1 / scale, c2 / scale, c3 / scale, c4 / scale
+
+	-- A zero leading coefficient is a lower-degree polynomial, not a reason to
+	-- divide by zero.  This is common for zero-gravity and short-range shots.
+	if isZero(c0) then
+		if not isZero(c1) then
+			local roots = {solveCubic(c1, c2, c3, c4)}
+			local returned = {}
+			for _, root in roots do appendRoot(returned, root) end
+			return #returned > 0 and returned or nil
+		elseif not isZero(c2) then
+			local roots = {solveQuadric(c2, c3, c4)}
+			local returned = {}
+			for _, root in roots do appendRoot(returned, root) end
+			return #returned > 0 and returned or nil
+		elseif not isZero(c3) then
+			return {-c4 / c3}
+		end
+		return
+	end
 
 	local coeffs = {}
 	local z, u, v, sub
@@ -135,6 +203,11 @@ function module.solveQuartic(c0, c1, c2, c3, c4)
 
 		s0, s1, s2 = solveCubic(coeffs[0], coeffs[1], coeffs[2], coeffs[3])
 		z = s0
+		-- A resolvent cubic should always have at least one real root, but
+		-- floating-point cancellation can still leave Cardano without a usable
+		-- value.  Return no roots and let SolveIntercept use its bounded numeric
+		-- fallback instead of throwing from the arithmetic below.
+		if not finiteScalar(z) then return end
 
 		u = z * z - r
 		v = 2 * z - p
@@ -192,7 +265,11 @@ function module.solveQuartic(c0, c1, c2, c3, c4)
 	if (num > 2) then s2 = s2 - sub end
 	if (num > 3) then s3 = s3 - sub end
 
-	return {s3, s2, s1, s0}
+	local returned = {}
+	for _, root in {s3, s2, s1, s0} do
+		appendRoot(returned, root)
+	end
+	return #returned > 0 and returned or nil
 end
 
 function module.SpawnTracer(from, to, custom)
@@ -240,6 +317,13 @@ local function finiteNumber(value)
 	return type(value) == 'number' and value == value and value > -math.huge and value < math.huge
 end
 
+local function finiteVector(value)
+	return typeof(value) == 'Vector3'
+		and finiteNumber(value.X)
+		and finiteNumber(value.Y)
+		and finiteNumber(value.Z)
+end
+
 local function interceptResidual(relativePosition, relativeVelocity, halfRelativeAcceleration, speed, time)
 	local offset = relativePosition + relativeVelocity * time + halfRelativeAcceleration * (time * time)
 	return offset:Dot(offset) - (speed * speed * time * time)
@@ -249,18 +333,24 @@ end
 -- the same speed supplied by the caller, so the solved angle and transmitted
 -- velocity cannot drift apart.
 function module.SolveIntercept(origin, projectileSpeed, projectileAcceleration, targetPosition, targetVelocity, targetAcceleration, minimumTime, maximumTime)
-	if typeof(origin) ~= 'Vector3' or typeof(projectileAcceleration) ~= 'Vector3'
-		or typeof(targetPosition) ~= 'Vector3' or typeof(targetVelocity) ~= 'Vector3'
-		or typeof(targetAcceleration) ~= 'Vector3' or not finiteNumber(projectileSpeed)
+	if not finiteVector(origin) or not finiteVector(projectileAcceleration)
+		or not finiteVector(targetPosition) or not finiteVector(targetVelocity)
+		or not finiteVector(targetAcceleration) or not finiteNumber(projectileSpeed)
 		or projectileSpeed <= eps then return nil end
 
-	minimumTime = math.max(tonumber(minimumTime) or 0, eps)
+	minimumTime = tonumber(minimumTime)
+	if not finiteScalar(minimumTime) or minimumTime < 0 then minimumTime = 0 end
+	minimumTime = math.max(minimumTime, eps)
 	maximumTime = tonumber(maximumTime) or 10
 	if not finiteNumber(maximumTime) or maximumTime < minimumTime then return nil end
 
 	local relativePosition = targetPosition - origin
 	local halfRelativeAcceleration = (targetAcceleration - projectileAcceleration) * 0.5
 	local bestTime
+	local function residualTolerance(root)
+		local scale = math.max(projectileSpeed * projectileSpeed * root * root, 1)
+		return math.max(0.0025, scale * 1e-5)
+	end
 	local function acceptRoot(root)
 		if not finiteNumber(root) or root < minimumTime or root > maximumTime then return end
 		local residual = math.abs(interceptResidual(
@@ -270,8 +360,7 @@ function module.SolveIntercept(origin, projectileSpeed, projectileAcceleration, 
 			projectileSpeed,
 			root
 		))
-		local scale = math.max(projectileSpeed * projectileSpeed * root * root, 1)
-		if residual <= math.max(0.05, scale * 0.001)
+		if residual <= residualTolerance(root)
 			and (not bestTime or root < bestTime) then
 			bestTime = root
 		end
@@ -284,59 +373,81 @@ function module.SolveIntercept(origin, projectileSpeed, projectileAcceleration, 
 		- projectileSpeed * projectileSpeed
 	local c1 = 2 * relativePosition:Dot(targetVelocity)
 	local c0 = relativePosition:Dot(relativePosition)
-	if math.abs(c4) > eps then
-		local roots = module.solveQuartic(c4, c3, c2, c1, c0)
-		if roots then
+	local coefficientScale = math.max(math.abs(c4), math.abs(c3), math.abs(c2), math.abs(c1), math.abs(c0))
+	if coefficientScale <= 0 then return nil end
+	local coefficientEpsilon = coefficientScale * 1e-12
+	if math.abs(c4) > coefficientEpsilon then
+		-- A closed-form quartic is an optimization, not a hard dependency.  A
+		-- degenerate resolvent or executor math edge case must fall through to the
+		-- bounded numerical search instead of aborting the caller's target query.
+		local solved, roots = pcall(module.solveQuartic, c4, c3, c2, c1, c0)
+		if solved and type(roots) == 'table' then
 			for _, root in roots do
 				acceptRoot(root)
 			end
 		end
-	elseif math.abs(c2) > eps then
-		local discriminant = c1 * c1 - 4 * c2 * c0
-		if discriminant >= 0 then
-			local squareRoot = math.sqrt(discriminant)
-			acceptRoot((-c1 - squareRoot) / (2 * c2))
-			acceptRoot((-c1 + squareRoot) / (2 * c2))
-		end
-	elseif math.abs(c1) > eps then
+	elseif math.abs(c2) > coefficientEpsilon then
+		local root0, root1 = solveQuadric(c2, c1, c0)
+		acceptRoot(root0)
+		acceptRoot(root1)
+	elseif math.abs(c1) > coefficientEpsilon then
 		acceptRoot(-c0 / c1)
 	end
 
 	-- Numerical fallback covers near-degenerate quartics and floating-point
 	-- roots rejected by the closed form at very short ranges.
 	if not bestTime then
-		local steps = 96
-		local previousTime = minimumTime
-		local previousValue = interceptResidual(
-			relativePosition,
-			targetVelocity,
-			halfRelativeAcceleration,
-			projectileSpeed,
-			previousTime
-		)
-		for step = 1, steps do
-			local currentTime = minimumTime + ((maximumTime - minimumTime) * step / steps)
-			local currentValue = interceptResidual(
+		local steps = 192
+		local times, values = {}, {}
+		for step = 0, steps do
+			local time = minimumTime + ((maximumTime - minimumTime) * step / steps)
+			times[step + 1] = time
+			values[step + 1] = interceptResidual(
 				relativePosition,
 				targetVelocity,
 				halfRelativeAcceleration,
 				projectileSpeed,
-				currentTime
+				time
 			)
-			if currentValue <= 0 and previousValue > 0 then
-				local low, high = previousTime, currentTime
-				for _ = 1, 28 do
-					local middle = (low + high) * 0.5
-					if interceptResidual(relativePosition, targetVelocity, halfRelativeAcceleration, projectileSpeed, middle) > 0 then
-						low = middle
-					else
-						high = middle
-					end
+		end
+		local function refineSignChange(low, high, lowValue)
+			for _ = 1, 32 do
+				local middle = (low + high) * 0.5
+				local middleValue = interceptResidual(relativePosition, targetVelocity, halfRelativeAcceleration, projectileSpeed, middle)
+				if math.abs(middleValue) <= residualTolerance(middle) then return middle end
+				if (lowValue <= 0) == (middleValue <= 0) then
+					low, lowValue = middle, middleValue
+				else
+					high = middle
 				end
-				acceptRoot(high)
-				break
 			end
-			previousTime, previousValue = currentTime, currentValue
+			return (low + high) * 0.5
+		end
+		local function refineTangent(low, high)
+			for _ = 1, 32 do
+				local left = low + (high - low) / 3
+				local right = high - (high - low) / 3
+				local leftValue = math.abs(interceptResidual(relativePosition, targetVelocity, halfRelativeAcceleration, projectileSpeed, left))
+				local rightValue = math.abs(interceptResidual(relativePosition, targetVelocity, halfRelativeAcceleration, projectileSpeed, right))
+				if leftValue <= rightValue then high = right else low = left end
+			end
+			return (low + high) * 0.5
+		end
+		for index = 1, #times do
+			local value = values[index]
+			if math.abs(value) <= residualTolerance(times[index]) then acceptRoot(times[index]) end
+			if index > 1 then
+				local previousValue = values[index - 1]
+				if (previousValue < 0 and value > 0) or (previousValue > 0 and value < 0) then
+					acceptRoot(refineSignChange(times[index - 1], times[index], previousValue))
+				end
+			end
+			if index > 1 and index < #times then
+				local previousAbs, nextAbs = math.abs(values[index - 1]), math.abs(values[index + 1])
+				if math.abs(value) <= previousAbs and math.abs(value) <= nextAbs then
+					acceptRoot(refineTangent(times[index - 1], times[index + 1]))
+				end
+			end
 		end
 	end
 	if not bestTime then return nil end
@@ -357,69 +468,52 @@ function module.SolveIntercept(origin, projectileSpeed, projectileAcceleration, 
 end
 
 function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params)
-	local disp = targetPos - origin
-	local p, q, r = targetVelocity.X, targetVelocity.Y, targetVelocity.Z
-	local h, j, k = disp.X, disp.Y, disp.Z
-	local l = -.5 * gravity
-
-	local f = workspace:Raycast(targetPos, Vector3.new(0, -playerHeight - 0.5, 0), params)
-	if f ~= nil and q <= 0.1 then
-		q = -(targetPos.Y - f.Position.Y)
+	if typeof(origin) ~= 'Vector3' or typeof(targetPos) ~= 'Vector3'
+		or typeof(targetVelocity) ~= 'Vector3' or not finiteScalar(projectileSpeed)
+		or projectileSpeed <= eps then return end
+	gravity = math.abs(tonumber(gravity) or 0)
+	if not finiteScalar(gravity) then return end
+	local numericHeight = tonumber(playerHeight)
+	if numericHeight ~= nil and (not finiteScalar(numericHeight) or numericHeight < 0) then
+		numericHeight = nil
 	end
 
-	--attemped gravity calculation, may return to it in the future.
-	if math.abs(q) > 0.01 and playerGravity and playerGravity > 0 then
-		local estTime = (disp.Magnitude / projectileSpeed)
-		local origq = q
-		local origj = j
-		for i = 1, 100 do
-			q -= (.5 * playerGravity) * estTime
-			local velo = targetVelocity * 0.016
-			local ray = workspace.Raycast(workspace, Vector3.new(targetPos.X, targetPos.Y, targetPos.Z), Vector3.new(velo.X, (q * estTime) - playerHeight, velo.Z), params)
-			if ray then
-				local newTarget = ray.Position + Vector3.new(0, playerHeight, 0)
-				estTime -= math.sqrt(((targetPos - newTarget).Magnitude * 2) / playerGravity)
-				targetPos = newTarget
-				j = (targetPos - origin).Y
-				q = 0
-				break
-			else
-				break
-			end
-		end
+	local velocity = targetVelocity
+	local grounded = false
+	if numericHeight and numericHeight > 0 then
+		local success, ray = pcall(workspace.Raycast, workspace, targetPos,
+			Vector3.new(0, -numericHeight - 0.5, 0), params)
+		grounded = success and ray ~= nil and velocity.Y <= 0.1
+	end
+	if grounded then
+		-- A floor hit means the target is supported; its vertical velocity is
+		-- zero, not the distance to the floor.  The old code injected that
+		-- distance as a downward speed and systematically aimed low.
+		velocity = Vector3.new(velocity.X, 0, velocity.Z)
 	end
 
-	local solutions = module.solveQuartic(
-		l*l,
-		-2*q*l,
-		q*q - 2*j*l - projectileSpeed*projectileSpeed + p*p + r*r,
-		2*j*q + 2*h*p + 2*k*r,
-		j*j + h*h + k*k
+	local targetAcceleration = Vector3.zero
+	-- Once the floor probe says the target is airborne, gravity still applies at
+	-- the apex where Y velocity is zero.  The previous velocity/jump gate made
+	-- that single frame look stationary and caused a systematic low shot.
+	local targetGravity = tonumber(playerGravity)
+	if not grounded and finiteScalar(targetGravity) and targetGravity > 0 then
+		targetAcceleration = Vector3.new(0, -targetGravity, 0)
+	end
+	local solution = module.SolveIntercept(
+		origin,
+		projectileSpeed,
+		Vector3.new(0, -gravity, 0),
+		targetPos,
+		velocity,
+		targetAcceleration,
+		0,
+		10
 	)
-
-	if solutions then
-		local bestT = math.huge
-		for _, v in solutions do
-			if v > 0 and v < bestT then
-				bestT = v
-			end
-		end
-	
-		if bestT < math.huge then
-			local t = bestT
-			local d = (h + p * t) / t
-			local e = (j + q * t - l * t * t) / t
-			local f2 = (k + r * t) / t
-			local aimDir = Vector3.new(d, e, f2).Unit
-			return origin + Vector3.new(d, e, f2), aimDir, t
-		end
-	elseif gravity == 0 then
-		local t = (disp.Magnitude / projectileSpeed)
-		local d = (h + p*t)/t
-		local e = (j + q*t - l*t*t)/t
-		local f = (k + r*t)/t
-		return origin + Vector3.new(d, e, f)
+	if solution and solution.InitialVelocity.Magnitude > eps then
+		return solution.AimPosition, solution.InitialVelocity.Unit, solution.FlightTime
 	end
+	return nil
 end
 
 return module

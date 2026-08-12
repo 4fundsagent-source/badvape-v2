@@ -1762,6 +1762,13 @@ components = {
 		return optionapi
 	end,
 	Divider = function(children, text)
+		-- Component factories are exposed through two calling conventions:
+		-- direct calls pass (parent, label), while the generic Create* wrapper
+		-- passes (label, parent, category). Normalize before parenting.
+		if typeof(children) ~= 'Instance' and typeof(text) == 'Instance' then
+			children, text = text, children
+		end
+		if typeof(children) ~= 'Instance' then return end
 		local divider = Instance.new('Frame')
 		divider.Name = 'Divider'
 		divider.Size = UDim2.new(1, 0, 0, 1)

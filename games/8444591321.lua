@@ -29,4 +29,33 @@ if not compileOk or type(chunk) ~= 'function' then
 	return false
 end
 
-return chunk(license)
+-- Developer-only route diagnostics: the canonical source historically caught
+-- its own bootstrap errors and returned nil, which made this alias look like
+-- a successful game-module load while leaving the GUI-only runtime active.
+-- Keep the alias behavior unchanged on success, but expose a thrown error or
+-- an incomplete fresh BedWars state during source testing.
+local runtimeEnvironment = (type(getgenv) == 'function' and getgenv()) or _G
+local previousBedwars = type(runtimeEnvironment) == 'table'
+	and runtimeEnvironment.BadVapeBedwars or nil
+local ok, result = xpcall(function()
+	return chunk(license)
+end, function(err)
+		if type(debug) == 'table' and type(debug.traceback) == 'function' then
+			return debug.traceback(tostring(err), 2)
+		end
+		return tostring(err)
+	end)
+if not ok then
+	warn('[BadVape route] canonical BedWars source failed: '..tostring(result))
+	return false
+end
+if result == false then
+	return false
+end
+local currentBedwars = type(runtimeEnvironment) == 'table'
+	and runtimeEnvironment.BadVapeBedwars or nil
+if type(currentBedwars) ~= 'table' or currentBedwars == previousBedwars then
+	warn('[BadVape route] canonical BedWars source returned without fresh BedWars state')
+	return false
+end
+return result

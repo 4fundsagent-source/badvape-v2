@@ -56,14 +56,66 @@ local function sortDistance(a, b)
 	return a.Magnitude < b.Magnitude
 end
 
+local function finiteNumber(value)
+	return type(value) == 'number'
+		and value == value
+		and value > -math.huge
+		and value < math.huge
+end
+
+local function finiteVector(value)
+	return typeof(value) == 'Vector3'
+		and finiteNumber(value.X)
+		and finiteNumber(value.Y)
+		and finiteNumber(value.Z)
+end
+
+local function normalizeRange(value)
+	local range = tonumber(value)
+	if not finiteNumber(range) then return math.huge end
+	return math.max(range, 0)
+end
+
+local function normalizeLimit(value)
+	local limit = tonumber(value)
+	if not finiteNumber(limit) then return math.huge end
+	return math.max(math.floor(limit), 0)
+end
+
 local function getLiveEntityPart(ent, partName)
-	local part = ent and ent[partName]
-	return part and part.Parent and part or nil
+	local part = ent and partName and ent[partName]
+	if not part and ent then
+		part = ent.RootPart or ent.HumanoidRootPart
+	end
+	if not part or not part.Parent then return nil end
+	local success, isPart = pcall(part.IsA, part, 'BasePart')
+	if not success or not isPart then return nil end
+	local character = ent.Character
+	if character and part ~= character and typeof(character) == 'Instance' then
+		local descendantSuccess, isDescendant = pcall(part.IsDescendantOf, part, character)
+		if not descendantSuccess or not isDescendant then return nil end
+	end
+	return part
 end
 
 local function entityIsVulnerable(ent)
 	local success, vulnerable = pcall(entitylib.isVulnerable, ent)
 	return success and vulnerable
+end
+
+local function entityIsTargetable(ent)
+	-- Game adapters can expose friend/target state that is not represented by a
+	-- Roblox signal (for example a GUI-maintained name list).  Give the adapter
+	-- a chance to refresh those cached flags immediately before every query.
+	if type(entitylib.refreshTargetState) == 'function' then
+		pcall(entitylib.refreshTargetState, ent)
+	end
+	local success, targetable = pcall(entitylib.targetCheck, ent)
+	if success and ent.Targetable ~= targetable then
+		ent.Targetable = targetable
+		entitylib.Events.EntityUpdated:Fire(ent)
+	end
+	return success and targetable == true
 end
 
 local function loopClean(tbl)
@@ -87,10 +139,13 @@ local function waitForChildOfType(obj, name, timeout, prop)
 end
 
 entitylib.targetCheck = function(ent)
+	if not ent then return false end
 	if ent.TeamCheck then
-		return ent:TeamCheck()
+		local success, result = pcall(ent.TeamCheck, ent)
+		return success and result == true
 	end
 	if ent.NPC then return true end
+	if not ent.Player or not lplr then return false end
 	if not lplr.Team then return true end
 	if not ent.Player.Team then return true end
 	if ent.Player.Team ~= lplr.Team then return true end
@@ -99,19 +154,29 @@ end
 
 entitylib.getUpdateConnections = function(ent)
 	local hum = ent.Humanoid
-	return {
-		hum:GetPropertyChangedSignal('Health'),
-		hum:GetPropertyChangedSignal('MaxHealth')
-	}
+	local returned = {}
+	if hum and hum.GetPropertyChangedSignal then
+		table.insert(returned, hum:GetPropertyChangedSignal('Health'))
+		table.insert(returned, hum:GetPropertyChangedSignal('MaxHealth'))
+	end
+	return returned
 end
 
 entitylib.isVulnerable = function(ent)
-	return ent.Health > 0 and not ent.Character.FindFirstChildWhichIsA(ent.Character, 'ForceField')
+	local health = ent and tonumber(ent.Health)
+	local character = ent and ent.Character
+	if not health or health <= 0 or not character or not character.Parent then return false end
+	local success, forceField = pcall(
+		character.FindFirstChildWhichIsA,
+		character,
+		'ForceField'
+	)
+	return success and not forceField
 end
 
 entitylib.getEntityColor = function(ent)
-	ent = ent.Player
-	return ent and tostring(ent.TeamColor) ~= 'White' and ent.TeamColor.Color or nil
+	ent = ent and ent.Player
+	return ent and ent.TeamColor and tostring(ent.TeamColor) ~= 'White' and ent.TeamColor.Color or nil
 end
 
 entitylib.IgnoreObject = RaycastParams.new()
@@ -140,16 +205,17 @@ end
 entitylib.EntityMouse = function(entitysettings)
 	if entitylib.isAlive then
 		local mouseLocation, sortingTable = entitysettings.MouseOrigin or getMousePosition(), {}
+		local range = normalizeRange(entitysettings.Range)
 		for _, v in entitylib.List do
 			if not entitysettings.Players and v.Player then continue end
 			if not entitysettings.NPCs and v.NPC then continue end
-			if not v.Targetable then continue end
+			if not entityIsTargetable(v) then continue end
 			local part = getLiveEntityPart(v, entitysettings.Part)
 			if not part then continue end
 			local position, vis = gameCamera.WorldToViewportPoint(gameCamera, part.Position)
 			if not vis then continue end
 			local mag = (mouseLocation - Vector2.new(position.x, position.y)).Magnitude
-			if mag > entitysettings.Range then continue end
+			if mag > range then continue end
 			if entityIsVulnerable(v) then
 				table.insert(sortingTable, {
 					Entity = v,
@@ -182,16 +248,16 @@ entitylib.EntityPosition = function(entitysettings)
 	if entitylib.isAlive then
 		local localRoot = entitylib.character and entitylib.character.HumanoidRootPart
 		local localPosition, sortingTable = entitysettings.Origin or (localRoot and localRoot.Parent and localRoot.Position), {}
-		if not localPosition then
+		if not finiteVector(localPosition) then
 			table.clear(entitysettings)
 			return
 		end
-		local range, customSort = entitysettings.Range, entitysettings.Sort or entitysettings.Priority
+		local range, customSort = normalizeRange(entitysettings.Range), entitysettings.Sort or entitysettings.Priority
 		local rangeSquared = range * range
 		for _, v in entitylib.List do
 			if not entitysettings.Players and v.Player then continue end
 			if not entitysettings.NPCs and v.NPC then continue end
-			if not v.Targetable then continue end
+			if not entityIsTargetable(v) then continue end
 			local part = getLiveEntityPart(v, entitysettings.Part)
 			if not part then continue end
 			local delta = part.Position - localPosition
@@ -232,16 +298,21 @@ entitylib.AllPosition = function(entitysettings)
 	if entitylib.isAlive then
 		local localRoot = entitylib.character and entitylib.character.HumanoidRootPart
 		local localPosition, sortingTable = entitysettings.Origin or (localRoot and localRoot.Parent and localRoot.Position), {}
-		if not localPosition then
+		if not finiteVector(localPosition) then
 			table.clear(entitysettings)
 			return returned
 		end
-		local range, customSort = entitysettings.Range, entitysettings.Sort
+		local range, customSort = normalizeRange(entitysettings.Range), entitysettings.Sort
+		local limit = normalizeLimit(entitysettings.Limit)
+		if limit <= 0 then
+			table.clear(entitysettings)
+			return returned
+		end
 		local rangeSquared = range * range
 		for _, v in entitylib.List do
 			if not entitysettings.Players and v.Player then continue end
 			if not entitysettings.NPCs and v.NPC then continue end
-			if not v.Targetable then continue end
+			if not entityIsTargetable(v) then continue end
 			local part = getLiveEntityPart(v, entitysettings.Part)
 			if not part then continue end
 			local delta = part.Position - localPosition
@@ -263,7 +334,7 @@ entitylib.AllPosition = function(entitysettings)
 				if entitylib.Wallcheck(localPosition, part.Position, entitysettings.Wallcheck) then continue end
 			end
 			table.insert(returned, v.Entity)
-			if #returned >= (entitysettings.Limit or math.huge) then break end
+			if #returned >= limit then break end
 		end
 		table.clear(sortingTable)
 	end
@@ -272,6 +343,10 @@ entitylib.AllPosition = function(entitysettings)
 end
 
 entitylib.getEntity = function(char)
+	local localEntity = entitylib.character
+	if localEntity and (localEntity.Player == char or localEntity.Character == char) then
+		return localEntity
+	end
 	for i, v in entitylib.List do
 		if v.Player == char or v.Character == char then
 			return v, i
@@ -281,6 +356,10 @@ end
 
 entitylib.addEntity = function(char, plr, teamfunc)
 	if not char then return end
+	-- CollectionService and CharacterAdded can both report the same instance
+	-- during streaming.  Do not create duplicate records or leave two pending
+	-- registration coroutines racing to publish one entity.
+	if entitylib.getEntity(char) or entitylib.EntityThreads[char] then return end
 	entitylib.EntityThreads[char] = task.spawn(function()
 		local hum = waitForChildOfType(char, 'Humanoid', 10)
 		local humrootpart = hum and waitForChildOfType(hum, 'RootPart', workspace.StreamingEnabled and 9e9 or 10, true)
@@ -323,37 +402,82 @@ entitylib.addEntity = function(char, plr, teamfunc)
 				table.insert(entitylib.List, entity)
 				entitylib.Events.EntityAdded:Fire(entity)
 			end
-			--[[table.insert(entity.Connections, char.ChildRemoved:Connect(function(part)
-				if (part == humrootpart or part == hum or part == head) then
-					local found = char:FindFirstChild(part.Name)
-					if found then
-						if part == humrootpart then
-							entity.HumanoidRootPart = found
-							entity.RootPart = found
-							humrootpart = found
-							return
-						elseif part == head then
-							entity.Head = found
-							head = found
-							return
-						end
-					end
+
+			-- Character rigs can replace their root/head while the Character instance
+			-- itself remains alive (streaming, respawn staging, and controller swaps).
+			-- Keep the entity record pointed at live instances instead of leaving every
+			-- consumer with a destroyed part.
+			local refreshQueued = false
+			local function refreshParts()
+				if not char.Parent
+					or (plr == lplr and (entitylib.character ~= entity or not entitylib.isAlive))
+					or (plr ~= lplr and entitylib.getEntity(char) ~= entity) then return end
+				local currentHum = char:FindFirstChildWhichIsA('Humanoid', true)
+				if currentHum ~= hum then
 					entitylib.removeEntity(char, plr == lplr)
+					task.defer(entitylib.addEntity, char, plr, teamfunc)
+					return
 				end
-			end))]]
+				local currentRoot = (currentHum and currentHum.RootPart) or char:FindFirstChild('HumanoidRootPart', true)
+				local currentHead = char:FindFirstChild('Head', true) or currentRoot
+				if not currentRoot or not currentRoot.Parent then return end
+				humrootpart = currentRoot
+				head = currentHead or currentRoot
+				entity.HumanoidRootPart = currentRoot
+				entity.RootPart = currentRoot
+				entity.Head = currentHead or currentRoot
+				entity.HipHeight = hum.HipHeight + (currentRoot.Size.Y / 2) + (hum.RigType == Enum.HumanoidRigType.R6 and 2 or 0)
+				entitylib.Events.EntityUpdated:Fire(entity)
+			end
+			local function queueRefresh()
+				if refreshQueued then return end
+				refreshQueued = true
+				task.defer(function()
+					refreshQueued = false
+					refreshParts()
+				end)
+			end
+			table.insert(entity.Connections, char.DescendantAdded:Connect(function(descendant)
+				if descendant:IsA('Humanoid') or descendant:IsA('BasePart')
+					or descendant.Name == 'Head' or descendant.Name == 'HumanoidRootPart' then
+					queueRefresh()
+				end
+			end))
+			table.insert(entity.Connections, char.DescendantRemoving:Connect(function(descendant)
+				if descendant == humrootpart or descendant == head or descendant == hum then
+					queueRefresh()
+				end
+			end))
+			if hum.GetPropertyChangedSignal then
+				table.insert(entity.Connections, hum:GetPropertyChangedSignal('RootPart'):Connect(queueRefresh))
+			end
+			if char.GetPropertyChangedSignal then
+				local ok, signal = pcall(char.GetPropertyChangedSignal, char, 'PrimaryPart')
+				if ok and signal then
+					table.insert(entity.Connections, signal:Connect(queueRefresh))
+				end
+			end
 		end
 		entitylib.EntityThreads[char] = nil
 	end)
 end
 
 entitylib.removeEntity = function(char, localcheck)
+	-- A character can be removed while its registration coroutine is still
+	-- waiting for a streamed Humanoid/root. Cancel it before the local-entity
+	-- fast path so it cannot publish a ghost record after respawn.
+	if char and entitylib.EntityThreads[char] then
+		task.cancel(entitylib.EntityThreads[char])
+		entitylib.EntityThreads[char] = nil
+	end
 	if localcheck then
 		local current = entitylib.character
 		-- Ignore a late CharacterRemoving signal for an old rig after a new
-		-- character has already been registered.  When the current record does
+		-- character has already been registered.  Without the identity check it
+		-- could mark the new local entity dead.  When the current record does
 		-- match, always detach and replace it, even if isAlive was already false:
-		-- team changes restart the entity tracker and otherwise leave a dead
-		-- record that blocks addEntity() as a duplicate.
+		-- Team changes call start()->stop()->refreshEntity(), and leaving the dead
+		-- record in place makes addEntity() reject the replacement as a duplicate.
 		if type(current) == 'table' and (not char or current.Character == char) then
 			local wasAlive = entitylib.isAlive
 			entitylib.isAlive = false
@@ -369,6 +493,9 @@ entitylib.removeEntity = function(char, localcheck)
 			if wasAlive then
 				entitylib.Events.LocalRemoved:Fire(current)
 			end
+			-- Do not leave a record that still matches char: addEntity() uses
+			-- getEntity() as its duplicate guard.  A fresh table lets the next
+			-- refresh/register operation publish the live local entity.
 			if entitylib.character == current then
 				entitylib.character = {}
 			end
@@ -377,12 +504,13 @@ entitylib.removeEntity = function(char, localcheck)
 	end
 
 	if char then
-		if entitylib.EntityThreads[char] then
-			task.cancel(entitylib.EntityThreads[char])
-			entitylib.EntityThreads[char] = nil
-		end
-
 		local entity, ind = entitylib.getEntity(char)
+		if entity and not ind and entity == entitylib.character then
+			-- The local entity is intentionally not stored in List.  A caller that
+			-- removes it by Character/Player still needs the same teardown path.
+			entitylib.removeEntity(entity.Character, true)
+			return
+		end
 		if ind then
 			for _, v in entity.Connections do
 				v:Disconnect()
@@ -395,6 +523,10 @@ entitylib.removeEntity = function(char, localcheck)
 end
 
 entitylib.refreshEntity = function(char, plr)
+	-- Local characters are not stored in List, so the old removeEntity(char)
+	-- call silently left the previous local record alive during a team/respawn
+	-- refresh.  That leaked attribute connections and allowed two local records
+	-- to race for entitylib.character.  Use the local cleanup path explicitly.
 	entitylib.removeEntity(char, plr == lplr)
 	entitylib.addEntity(char, plr)
 end
@@ -434,6 +566,16 @@ entitylib.removePlayer = function(plr)
 		table.clear(entitylib.PlayerConnections[plr])
 		entitylib.PlayerConnections[plr] = nil
 	end
+	local character = plr and plr.Character
+	if character then
+		entitylib.removeEntity(character, plr == lplr)
+	elseif plr == lplr and entitylib.character and entitylib.character.Character then
+		-- PlayerRemoving can run after CharacterRemoving has detached Character.
+		-- Still tear down the local record instead of leaving it marked alive.
+		entitylib.removeEntity(entitylib.character.Character, true)
+	end
+	-- Keep the player-object lookup for records whose Character has already
+	-- been detached before PlayerRemoving fires.
 	entitylib.removeEntity(plr)
 end
 
