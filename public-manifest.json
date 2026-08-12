@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-4dcc284dcc57ed04323d2146ba9412d3ce2c10fe9d55df8b5fa73b427f30c5be",
+  "revision": "sha256-ebf9b3305be85a4529bbb7f4602df1f56053e5147184b97d532681f3100ae308",
   "files": [
     {
       "path": "bootstrap.lua",
@@ -249,8 +249,8 @@
     },
     {
       "path": "profiles/blatant6872274481.txt",
-      "bytes": 52474,
-      "sha256": "17db8763e81c6eb4f3fea8d72752b1d03ea475e330db79a1aba02c0ce4989615"
+      "bytes": 37906,
+      "sha256": "a68a2f864bd02492325a247cb961b65c73e5e62fee228cffad20ffee17db627a"
     },
     {
       "path": "profiles/default117398147513099.txt",
