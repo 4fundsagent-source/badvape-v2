@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sha256-3042cca554dfc830bdf2949774fb93bfa761e338dfdb1647610777f235703fce",
+  "revision": "sha256-26a330828c76fe301d7f102560f1c7056ba436835e93fbbd10b8a0a5675198d0",
   "files": [
     {
       "path": "bootstrap.lua",
@@ -169,8 +169,8 @@
     },
     {
       "path": "init.lua",
-      "bytes": 56404,
-      "sha256": "7c38609ddc2539c9b0c0502221d3d3eb9540d7615e64c431620160c61f571d3b"
+      "bytes": 56629,
+      "sha256": "c51bbceebe183f016b45d3f2b2079c9953ad86e869eb7bac84438028f4e6be49"
     },
     {
       "path": "libraries/badvape-theme.lua",
