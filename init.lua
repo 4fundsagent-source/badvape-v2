@@ -979,11 +979,26 @@ local function inspectFileContents(entry, readOk, contents)
 		observation.error = contents
 		return observation
 	end
+	-- Canonicalize once and compute one digest.  The previous implementation
+	-- called contentMatches (which hashes) and then hashed the same file again
+	-- to populate diagnostics.  Large protected modules paid that cost twice
+	-- during every installer scan.
+	local canonicalContents = canonicalPublicContent(entry and entry.path, contents)
 	observation.bytes = #contents
-	observation.matches = entry and contentMatches(entry, contents) or 'unknown'
 	if hashCandidate then
-		local hashOk, digest = invokeHash(hashCandidate, hashOwner, hashMode, contents, hashUseOwner)
+		local hashOk, digest = invokeHash(hashCandidate, hashOwner, hashMode, canonicalContents, hashUseOwner)
 		observation.sha256 = hashOk and validDigest(digest) and digest:lower() or 'hash-failed'
+	end
+	if not entry then
+		observation.matches = 'unknown'
+	elseif type(canonicalContents) ~= 'string' or #canonicalContents ~= entry.bytes then
+		observation.matches = false
+	elseif not hashCandidate then
+		-- Integrity is mandatory when no verified digest capability is present.
+		observation.matches = false
+	else
+		observation.matches = observation.sha256 ~= 'hash-failed'
+			and observation.sha256 == entry.sha256
 	end
 	return observation
 end
