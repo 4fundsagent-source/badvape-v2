@@ -137,7 +137,7 @@ end
 
 -- Keep the bootstrap and installer on one reviewed immutable snapshot.  The
 -- ref is advanced together with the public runtime release.
-local releaseRef = 'b5ae93a7adb61df81d97f9d7cc68adb074a61de2'
+local releaseRef = 'd4bb9d779195a3fd4fbce67285151f656cf61237'
 if requestedReleaseRef ~= nil then
 	if type(requestedReleaseRef) ~= 'string'
 		or not requestedReleaseRef:match('^[0-9a-f]+$')
