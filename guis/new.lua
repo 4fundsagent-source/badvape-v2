@@ -5827,6 +5827,8 @@ function mainapi:Load(skipgui, profile)
 		self.ProfileLabel.Size = UDim2.fromOffset(getfontsize(self.ProfileLabel.Text, self.ProfileLabel.TextSize, self.ProfileLabel.Font).X + 16, 24)
 	end
 
+	local loadedProfileModules = {}
+	local loadedProfileLegit = {}
 	if isfile('badvape/profiles/'..self.Profile..self.Place..'.txt') then
 		local savedata = loadJson('badvape/profiles/'..self.Profile..self.Place..'.txt')
 		if not savedata then
@@ -5837,6 +5839,8 @@ function mainapi:Load(skipgui, profile)
 		savedata.Categories = profileTable(savedata.Categories)
 		savedata.Modules = profileTable(savedata.Modules)
 		savedata.Legit = profileTable(savedata.Legit)
+		loadedProfileModules = savedata.Modules
+		loadedProfileLegit = savedata.Legit
 
 		for i, v in savedata.Categories do
 			if type(v) ~= 'table' then continue end
@@ -5915,6 +5919,17 @@ function mainapi:Load(skipgui, profile)
 		self:UpdateTextGUI(true)
 	else
 		self:Save()
+	end
+	-- Keep decoded profile state for game modules registered asynchronously
+	-- after the initial GUI pass.
+	self._LoadedProfileModules = loadedProfileModules
+	self._LoadedProfileLegit = loadedProfileLegit
+	self._AppliedProfileModules = {}
+	for name, object in self.Modules do
+		self._AppliedProfileModules[name] = object
+	end
+	for name, object in self.Legit.Modules do
+		self._AppliedProfileModules['@legit:'..name] = object
 	end
 
 	if self.Downloader then
@@ -6007,6 +6022,64 @@ function mainapi:LoadOptions(object, savedoptions)
 			pcall(option.Load, option, v)
 		end
 	end
+end
+
+-- Apply profile state to modules that arrive after the initial GUI load.
+function mainapi:ApplyProfileModules()
+	local modules = self._LoadedProfileModules
+	local legit = self._LoadedProfileLegit
+	if type(modules) ~= 'table' and type(legit) ~= 'table' then
+		return false
+	end
+	local applied = self._AppliedProfileModules
+	if type(applied) ~= 'table' then
+		applied = {}
+		self._AppliedProfileModules = applied
+	end
+	local changed = false
+	if type(modules) == 'table' then
+		for name, saved in modules do
+			if type(saved) ~= 'table' then continue end
+			local resolved = resolveModuleName(self.Modules, name)
+			local object = resolved and self.Modules[resolved]
+			if not object then continue end
+			if applied[resolved] == object then continue end
+			if object.Options and saved.Options then
+				self:LoadOptions(object, saved.Options)
+			end
+			if saved.Enabled ~= object.Enabled then
+				object:Toggle(true)
+			end
+			local bind = type(saved.Bind) == 'table' and saved.Bind or {}
+			object:SetBind(bind)
+			if object.Object and object.Object.Bind then
+				object.Object.Bind.Visible = #bind > 0
+			end
+			applied[resolved] = object
+			changed = true
+		end
+	end
+	if type(legit) == 'table' then
+		for name, saved in legit do
+			if type(saved) ~= 'table' then continue end
+			local object = self.Legit.Modules[name]
+			if not object then continue end
+			local key = '@legit:'..name
+			if applied[key] == object then continue end
+			if object.Options and saved.Options then
+				self:LoadOptions(object, saved.Options)
+			end
+			if saved.Enabled ~= object.Enabled then
+				object:Toggle()
+			end
+			applied[key] = object
+			changed = true
+		end
+	end
+	if changed and self.Loaded then
+		self:UpdateTextGUI(true)
+	end
+	return changed
 end
 
 function mainapi:Remove(obj)

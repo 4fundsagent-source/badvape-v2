@@ -24,18 +24,44 @@ if type(source) ~= 'string' or source == '404: Not Found' or type(loadstring) ~=
 	return false
 end
 
-local compileOk, chunk = pcall(loadstring, source, tostring(vape.Place))
-if not compileOk or type(chunk) ~= 'function' then
-	return false
+-- Cache the compiled protected artifact for warm reloads/teleports.  The
+-- release/ref and source edge bytes invalidate the entry when the deployed
+-- artifact changes without hashing the full ciphertext on every run.
+local routeCache, routeCacheKey, chunk
+if type(shared) == 'table' and shared.BadVapeProtectedRouteCacheDisabled ~= true then
+	routeCache = shared.BadVapeProtectedRouteChunkCache
+	if type(routeCache) ~= 'table' then
+		routeCache = {}
+		shared.BadVapeProtectedRouteChunkCache = routeCache
+	end
+	local releaseRef = type(shared.BadVapeReleaseRef) == 'string'
+		and shared.BadVapeReleaseRef or 'main'
+	routeCacheKey = path..':'..releaseRef..':'..tostring(#source)
+		..':'..source:sub(1, 32)..':'..source:sub(-32)
+	local cachedChunk = routeCache[routeCacheKey]
+	if type(cachedChunk) == 'function' then chunk = cachedChunk end
+end
+if type(chunk) ~= 'function' then
+	local compileOk, compiled = pcall(loadstring, source, tostring(vape.Place))
+	if not compileOk or type(compiled) ~= 'function' then
+		return false
+	end
+	chunk = compiled
+	if routeCache then
+		for key in routeCache do
+			if key ~= routeCacheKey then routeCache[key] = nil end
+		end
+		routeCache[routeCacheKey] = chunk
+	end
 end
 
--- Developer-only route diagnostics: the canonical source historically caught
--- its own bootstrap errors and returned nil, which made this alias look like
--- a successful game-module load while leaving the GUI-only runtime active.
--- Keep the alias behavior unchanged on success, but expose a thrown error or
--- an incomplete fresh BedWars state during source testing.
+-- Keep the route's normal return/exception behavior unchanged.  The fresh
+-- BedWars-state check is useful only in the isolated developer harness; doing
+-- it for every caller breaks ordinary redirect contracts that intentionally
+-- use a tiny canonical stub (and can also call a missing `warn`).
 local runtimeEnvironment = (type(getgenv) == 'function' and getgenv()) or _G
-local previousBedwars = type(runtimeEnvironment) == 'table'
+local developerRouteCheck = type(shared) == 'table' and shared.BadVapeDeveloper == true
+local previousBedwars = developerRouteCheck and type(runtimeEnvironment) == 'table'
 	and runtimeEnvironment.BadVapeBedwars or nil
 local ok, result = xpcall(function()
 	return chunk(license)
@@ -46,7 +72,9 @@ end, function(err)
 		return tostring(err)
 	end)
 if not ok then
-	warn('[BadVape route] canonical BedWars source failed: '..tostring(result))
+	if type(warn) == 'function' then
+		warn('[BadVape route] canonical BedWars source failed: '..tostring(result))
+	end
 	return false
 end
 if result == false then
@@ -54,8 +82,10 @@ if result == false then
 end
 local currentBedwars = type(runtimeEnvironment) == 'table'
 	and runtimeEnvironment.BadVapeBedwars or nil
-if type(currentBedwars) ~= 'table' or currentBedwars == previousBedwars then
-	warn('[BadVape route] canonical BedWars source returned without fresh BedWars state')
+if developerRouteCheck and (type(currentBedwars) ~= 'table' or currentBedwars == previousBedwars) then
+	if type(warn) == 'function' then
+		warn('[BadVape route] canonical BedWars source returned without fresh BedWars state')
+	end
 	return false
 end
 return result

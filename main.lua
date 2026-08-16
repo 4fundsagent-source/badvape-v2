@@ -27,6 +27,9 @@ if type(forwardedLicense) == 'table' then
 	end
 end
 license.Key = type(license.Key) == 'string' and license.Key or nil
+-- LuaProt markers are retained for already-issued legacy fixtures only. The
+-- supported `/getscript` flow issues SimpleAuth/BV credentials, so this branch
+-- is not used by current releases.
 local luaProtProductMarker, luaProtKey
 if license.Key then
 	luaProtProductMarker, luaProtKey = license.Key:match('^LP%-([BR])%-([a-f0-9]+)$')
@@ -174,6 +177,15 @@ end
 
 local function runSourceWithTimeout(source, chunkName, timeout, ...)
 	local arguments = table.pack(...)
+	local scheduler = type(task) == 'table'
+		and type(task.spawn) == 'function' and type(task.wait) == 'function'
+	if not scheduler then
+		-- A small Luau harness may not provide cooperative scheduling. Execute
+		-- synchronously there; real executors take the bounded worker path below.
+		local ok, result = runSource(source, chunkName,
+			table.unpack(arguments, 1, arguments.n))
+		return ok, result, false
+	end
 	local finished, result = false, nil
 	local thread = task.spawn(function()
 		result = table.pack(runSource(source, chunkName, table.unpack(arguments, 1, arguments.n)))
@@ -412,11 +424,18 @@ local function installTeleportReload()
 	end
 
 	local teleportCredential = tostring(license.Key or '')
+	-- SimpleAuth credentials are forwarded unchanged across a teleport so the
+	-- sealed wrapper can perform its own v4 verification in the destination
+	-- place.  The LP branch is opt-in compatibility only and is never selected
+	-- by the current BV/UID flow.
+	local teleportSimpleAuthKey = teleportCredential:match('^BV%-[DML]%-[A-Z2-7]{32}$')
 	local teleportMarker, teleportLuaProtKey = teleportCredential:match('^LP%-([BR])%-([a-f0-9]+)$')
 	local teleportUid = teleportCredential:lower()
-	if teleportMarker and #teleportLuaProtKey == 24 then
+	if teleportSimpleAuthKey then
+		-- Keep the case-sensitive BV key intact; SimpleAuth keys are not UIDs.
+	elseif teleportMarker and #teleportLuaProtKey == 24 then
 		-- Keep the product marker for local wrong-game detection. The runtime
-		-- installs only the raw key into LuaProt's global.
+		-- installs only the raw key into the legacy provider global.
 	elseif #teleportUid >= 1 and #teleportUid <= 24 and teleportUid:match('^%l[%w_]*$') then
 		teleportCredential = teleportUid
 	else
@@ -498,7 +517,8 @@ local function installTeleportReload()
 		return false
 	end
 	recordDiagnostic('teleport_queue_ready', {
-		credentialKind = teleportMarker and 'luaprot' or 'uid',
+		credentialKind = teleportSimpleAuthKey and 'simpleauth-key'
+			or (teleportMarker and 'legacy-provider-key' or 'uid'),
 		releaseRef = installedRef,
 	})
 	local queueAttempted = false
@@ -984,6 +1004,15 @@ local previousUninject = vape.Uninject
 if type(previousUninject) == 'function' then
 	vape.Uninject = function(self, ...)
 		local ownsSharedRuntime = shared.BadVape == self
+		if ownsSharedRuntime then
+			-- Wake a protected game module that is waiting on its asynchronous
+			-- bootstrap.  Without a terminal state the loader can remain blocked
+			-- until its full timeout while the teardown is already in progress.
+			local loadSignal = shared.BadVapeLuaProtLoadSignal
+			if type(loadSignal) == 'table' and loadSignal.state == 'pending' then
+				loadSignal.state = 'failed'
+			end
+		end
 		if shared.BadVapeDownloadFile == ownedDownloadFile then
 			shared.BadVapeDownloadFile = nil
 		end
@@ -1114,29 +1143,37 @@ local function installLuaProtRequestCompatibility()
 		return normalizeResponse(adapter(normalizedOptions))
 	end
 
-	-- The official loader always prefers `http.request` when it exists. Some
-	-- executors expose a stub there while their direct `request` works. Probe all
-	-- candidates concurrently and install the first response that is known-good.
+	-- The official loader prefers `http.request` when it exists. Some test
+	-- harnesses (and a few minimal executors) do not expose task scheduling;
+	-- choose the first adapter there instead of crashing before the loader can
+	-- run. Full executors still probe concurrently so a stub `http.request` can
+	-- fall back to a working direct adapter.
 	local selected, selectedIndex
-	local completed = 0
-	for index, adapter in ipairs(adapters) do
-		task.spawn(function()
-			local ok, response = pcall(callAdapter, adapter, {
-				Url = 'https://eu-1.luaprot.net/api/v1/nodes/get',
-				Method = 'GET',
-			})
-			if not selected and ok and type(response) == 'table'
-				and response.StatusCode == 200 and type(response.Body) == 'string'
-				and response.Body ~= '' then
-				selected = adapter
-				selectedIndex = index
-			end
-			completed += 1
-		end)
-	end
-	local probeDeadline = os.clock() + 8
-	while not selected and completed < #adapters and os.clock() < probeDeadline do
-		task.wait()
+	local scheduler = type(task) == 'table'
+		and type(task.spawn) == 'function' and type(task.wait) == 'function'
+	if not scheduler then
+		selected, selectedIndex = adapters[1], 1
+	else
+		local completed = 0
+		for index, adapter in ipairs(adapters) do
+			task.spawn(function()
+				local ok, response = pcall(callAdapter, adapter, {
+					Url = 'https://eu-1.luaprot.net/api/v1/nodes/get',
+					Method = 'GET',
+				})
+				if not selected and ok and type(response) == 'table'
+					and response.StatusCode == 200 and type(response.Body) == 'string'
+					and response.Body ~= '' then
+					selected = adapter
+					selectedIndex = index
+				end
+				completed += 1
+			end)
+		end
+		local probeDeadline = os.clock() + 8
+		while not selected and completed < #adapters and os.clock() < probeDeadline do
+			task.wait()
+		end
 	end
 	if not selected then
 		recordDiagnostic('luaprot_request_probe_failed', {adapters = #adapters})
@@ -1209,8 +1246,8 @@ local protectedAuthReasonMessages = {
 	rate_limited = 'Too many authentication attempts were made. Wait one minute, then try the script again.',
 	script_outdated = 'This script is outdated. Run /getscript in Discord and execute the latest script.',
 	uid_requires_bound_device = 'Your UID script cannot link a new or reset device. Run /getscript in Discord and execute the new key-based script once.',
-	provider_runtime_failed = 'LuaProt could not finish loading the protected game module. Rejoin, run /getscript again, and send badvape/badvape-debug.txt to support if it repeats.',
-	provider_runtime_timeout = 'LuaProt took too long to finish loading the protected game module. Rejoin, run /getscript again, and send badvape/badvape-debug.txt to support if it repeats.',
+	provider_runtime_failed = 'The protected game module could not finish loading. Rejoin, run /getscript again, and send badvape/badvape-debug.txt to support if it repeats.',
+	provider_runtime_timeout = 'The protected game module took too long to finish loading. Rejoin, run /getscript again, and send badvape/badvape-debug.txt to support if it repeats.',
 }
 local protectedAuthStageMessages = {
 	credential_invalid = protectedAuthReasonMessages.auth_failed,
@@ -1353,11 +1390,28 @@ local function loadGameModule(placeId)
 				path = gamePath,
 				placeId = placeId,
 			})
+		elseif luaProtLoadSignal.state == 'deferred' then
+			-- BedWars can be entered through a lobby/pre-match place where the
+			-- guarded source intentionally schedules its game bootstrap for the
+			-- destination server. Preserve that result for the normal deferred
+			-- branch below instead of treating it as a completed game module.
+			recordDiagnostic('luaprot_payload_wait_deferred', {
+				elapsedMs = elapsedMs,
+				path = gamePath,
+				placeId = placeId,
+			})
+			results = table.pack(true, 'deferred')
 		else
 			local timedOut = luaProtLoadSignal.state == 'pending'
 			local reason = timedOut and 'provider_runtime_timeout' or 'provider_runtime_failed'
 			local detail = timedOut and 'protected payload completion timed out'
 				or 'protected payload reported a loading failure'
+			-- The protected source owns an asynchronous bootstrap task. Mark the
+			-- captured signal terminal before clearing it so that task observes the
+			-- cancellation and cannot register game modules after this fallback.
+			if luaProtLoadSignal.state == 'pending' then
+				luaProtLoadSignal.state = 'failed'
+			end
 			shared.BadVapeProtectedFailure = {
 				detail = detail,
 				reason = reason,

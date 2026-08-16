@@ -10,7 +10,7 @@ The compact customer entrypoint remains supported:
 
 ```lua
 loadstring(game:HttpGet 'https://luvit.cc')() {
-    log { "YOUR-LICENSE-KEY" }
+    log { "YOUR-BV-KEY-OR-BOUND-UID" }
 }
 ```
 
@@ -36,7 +36,7 @@ small:
 - Missing, unsupported, or rejected game modules leave the universal/base
   runtime available instead of aborting the whole client.
 
-The protected artifact performs one synchronous v4 authorization request. It
+The protected artifact performs one synchronous SimpleAuth v4 authorization request. It
 does not require Actors, SharedTables, prewarming, or polling. Its HTTP adapter
 supports the common executor request APIs, and its sealed payload opener has a
 pure-Luau fallback when the native `buffer` API is unavailable.
@@ -66,3 +66,15 @@ protected-auth failure stage and correlation reference when available.
 
 The report does not store the customer's key or UID, HWID/device value, request
 headers, auth tokens, response bodies, source contents, or profile contents.
+
+## Local atomic release build
+
+For a reviewable source artifact, run from the repository root:
+
+```powershell
+.\tools\stage_atomic_release.ps1
+```
+
+This creates one deterministic archive and its artifact-level digest and
+summary under `tmp`. It is a build/handoff artifact only; the production
+installer still uses its existing reviewed update contract.

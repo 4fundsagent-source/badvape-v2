@@ -3245,6 +3245,8 @@ function mainapi:Load(skipgui, profile)
 	}}
 	self.Categories.Profiles:ChangeValue()
 
+	local loadedProfileModules = {}
+	local loadedProfileLegit = {}
 	if isfile('badvape/profiles/'..self.Profile..self.Place..'.txt') then
 		local savedata = loadJson('badvape/profiles/'..self.Profile..self.Place..'.txt')
 		if not savedata then
@@ -3259,6 +3261,8 @@ function mainapi:Load(skipgui, profile)
 		savedata.Categories = profileTable(savedata.Categories)
 		savedata.Modules = profileTable(savedata.Modules)
 		savedata.Legit = profileTable(savedata.Legit)
+		loadedProfileModules = savedata.Modules
+		loadedProfileLegit = savedata.Legit
 
 		for i, v in savedata.Categories do
 			if type(v) ~= 'table' then continue end
@@ -3332,6 +3336,15 @@ function mainapi:Load(skipgui, profile)
 	else
 		self:Save()
 	end
+	self._LoadedProfileModules = loadedProfileModules
+	self._LoadedProfileLegit = loadedProfileLegit
+	self._AppliedProfileModules = {}
+	for name, object in self.Modules do
+		self._AppliedProfileModules[name] = object
+	end
+	for name, object in self.Legit.Modules do
+		self._AppliedProfileModules['@legit:'..name] = object
+	end
 
 	if self.Downloader then
 		self.Downloader:Destroy()
@@ -3384,6 +3397,58 @@ function mainapi:LoadOptions(object, savedoptions)
 			pcall(option.Load, option, v)
 		end
 	end
+end
+
+function mainapi:ApplyProfileModules()
+	local modules = self._LoadedProfileModules
+	local legit = self._LoadedProfileLegit
+	if type(modules) ~= 'table' and type(legit) ~= 'table' then
+		return false
+	end
+	local applied = self._AppliedProfileModules
+	if type(applied) ~= 'table' then
+		applied = {}
+		self._AppliedProfileModules = applied
+	end
+	local changed = false
+	if type(modules) == 'table' then
+		for name, saved in modules do
+			if type(saved) ~= 'table' then continue end
+			local resolved = resolveModuleName(self.Modules, name)
+			local object = resolved and self.Modules[resolved]
+			if not object or applied[resolved] == object then continue end
+			if object.Options and saved.Options then
+				self:LoadOptions(object, saved.Options)
+			end
+			if saved.Enabled ~= object.Enabled then
+				object:Toggle(true)
+			end
+			object:SetBind(type(saved.Bind) == 'table' and saved.Bind or {})
+			applied[resolved] = object
+			changed = true
+		end
+	end
+	if type(legit) == 'table' then
+		for name, saved in legit do
+			if type(saved) ~= 'table' then continue end
+			local object = self.Legit.Modules[name]
+			if not object then continue end
+			local key = '@legit:'..name
+			if applied[key] == object then continue end
+			if object.Options and saved.Options then
+				self:LoadOptions(object, saved.Options)
+			end
+			if saved.Enabled ~= object.Enabled then
+				object:Toggle()
+			end
+			applied[key] = object
+			changed = true
+		end
+	end
+	if changed and self.Loaded then
+		self:UpdateTextGUI(true)
+	end
+	return changed
 end
 
 function mainapi:Remove(obj)

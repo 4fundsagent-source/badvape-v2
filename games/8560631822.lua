@@ -24,9 +24,32 @@ if type(source) ~= 'string' or source == '404: Not Found' or type(loadstring) ~=
 	return false
 end
 
-local compileOk, chunk = pcall(loadstring, source, tostring(vape.Place))
-if not compileOk or type(chunk) ~= 'function' then
-	return false
+local routeCache, routeCacheKey, chunk
+if type(shared) == 'table' and shared.BadVapeProtectedRouteCacheDisabled ~= true then
+	routeCache = shared.BadVapeProtectedRouteChunkCache
+	if type(routeCache) ~= 'table' then
+		routeCache = {}
+		shared.BadVapeProtectedRouteChunkCache = routeCache
+	end
+	local releaseRef = type(shared.BadVapeReleaseRef) == 'string'
+		and shared.BadVapeReleaseRef or 'main'
+	routeCacheKey = path..':'..releaseRef..':'..tostring(#source)
+		..':'..source:sub(1, 32)..':'..source:sub(-32)
+	local cachedChunk = routeCache[routeCacheKey]
+	if type(cachedChunk) == 'function' then chunk = cachedChunk end
+end
+if type(chunk) ~= 'function' then
+	local compileOk, compiled = pcall(loadstring, source, tostring(vape.Place))
+	if not compileOk or type(compiled) ~= 'function' then
+		return false
+	end
+	chunk = compiled
+	if routeCache then
+		for key in routeCache do
+			if key ~= routeCacheKey then routeCache[key] = nil end
+		end
+		routeCache[routeCacheKey] = chunk
+	end
 end
 
 return chunk(license)

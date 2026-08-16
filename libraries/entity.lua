@@ -180,8 +180,16 @@ entitylib.getEntityColor = function(ent)
 end
 
 entitylib.IgnoreObject = RaycastParams.new()
+-- Keep the filter mode explicit.  Relying on the engine default made the
+-- result depend on the executor/Roblox build that created the params object.
+entitylib.IgnoreObject.FilterType = Enum.RaycastFilterType.Exclude
 entitylib.IgnoreObject.RespectCanCollide = true
+entitylib.IgnoreObject.IgnoreWater = true
 entitylib.Wallcheck = function(origin, position, ignoreobject)
+	if not finiteVector(origin) or not finiteVector(position) then
+		return nil
+	end
+
 	if typeof(ignoreobject) ~= 'Instance' then
 		local ignorelist = {gameCamera, lplr.Character}
 		for _, v in entitylib.List do
@@ -199,7 +207,33 @@ entitylib.Wallcheck = function(origin, position, ignoreobject)
 		ignoreobject = entitylib.IgnoreObject
 		ignoreobject.FilterDescendantsInstances = ignorelist
 	end
-	return workspace.Raycast(workspace, origin, (position - origin), ignoreobject)
+
+	local delta = position - origin
+	if delta.Magnitude <= 1e-5 then
+		return nil
+	end
+
+	-- FloodCraft's sword controller checks more than one body height.  A single
+	-- root-to-root ray can miss a wall that covers the torso/head while leaving
+	-- the root ray clear (or report a false block when only the feet are hidden).
+	-- Preserve the first hit for callers that use the return value, but accept
+	-- the target when any of the sampled sight lines is clear, matching the
+	-- native canSee contract.
+	local firstHit = workspace.Raycast(workspace, origin, delta, ignoreobject)
+	if not firstHit then
+		return nil
+	end
+	local samples = {
+		Vector3.zero,
+		Vector3.new(0, 2.5, 0),
+		Vector3.new(0, -2.5, 0)
+	}
+	for _, offset in samples do
+		if not workspace.Raycast(workspace, origin + offset, delta, ignoreobject) then
+			return nil
+		end
+	end
+	return firstHit
 end
 
 entitylib.EntityMouse = function(entitysettings)

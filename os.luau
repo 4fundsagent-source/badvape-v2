@@ -103,10 +103,7 @@ if delfolder and isfolder(folder..'/assets/rise') then
 end
 
 if not safeIsFile(folder..'/profiles/commit.txt') then
-	-- Public installs follow the live branch until the installer has recorded
-	-- an immutable release.  `local` is reserved for the explicitly marked
-	-- developer bundle and must never be inferred from a missing cache marker.
-	writefile(folder..'/profiles/commit.txt', 'main')
+	writefile(folder..'/profiles/commit.txt', 'local')
 end
 
 if not safeIsFile(folder..'/profiles/gui.txt') then
@@ -116,7 +113,7 @@ end
 local forwardedLicense = ...
 local license = type(forwardedLicense) == 'table' and forwardedLicense or {}
 license.Key = type(license.Key) == 'string' and license.Key or nil
-license.Commit = license.Commit or 'main'
+license.Commit = license.Commit or 'local'
 
 local builtInProfileNames = {'default', 'blatant'}
 local function ensureBuiltInProfiles(profiles)
@@ -226,12 +223,9 @@ end
 applyBadVapeGuiThemeOnce()
 pcall(repairBuiltInProfileList, folder..'/profiles/2619619496.gui.txt')
 
--- Do not infer developer mode from a cache marker.  A public install can be
--- left with a stale `commit.txt` by an interrupted update, and treating that
--- marker as developer mode bypasses the manifest updater for every run.
--- Private bundles opt in explicitly by setting shared.BadVapeDeveloper=true.
 if shared.BadVapeDeveloper == nil then
-	shared.BadVapeDeveloper = false
+	local commitOk, commit = pcall(readfile, folder..'/profiles/commit.txt')
+	shared.BadVapeDeveloper = commitOk and commit == 'local'
 end
 shared.BadVapeReload = shared.BadVapeReload or false
 

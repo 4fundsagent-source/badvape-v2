@@ -8142,13 +8142,31 @@ run(function()
     local Extend
 
     local Reference = {}
+    local adjusting = {}
     local function Added(v)
     	if v:IsA(`ProximityPrompt`) then
-    		Reference[v] = v.MaxActivationDistance
-    		v.MaxActivationDistance = v.MaxActivationDistance + Extend.Value
-    		PromptExtender:Clean(v:GetPropertyChangedSignal('MaxActivationDistance'):Connect(function()
+    		if Reference[v] == nil then
     			Reference[v] = v.MaxActivationDistance
-    			v.MaxActivationDistance = v.MaxActivationDistance + Extend.Value
+    		end
+    		local desired = Reference[v] + Extend.Value
+    		if v.MaxActivationDistance ~= desired then
+    			adjusting[v] = true
+    			v.MaxActivationDistance = desired
+    			adjusting[v] = nil
+    		end
+    		PromptExtender:Clean(v:GetPropertyChangedSignal('MaxActivationDistance'):Connect(function()
+    			if adjusting[v] or not PromptExtender.Enabled then return end
+    			local base = Reference[v]
+    			if base == nil then
+    				base = v.MaxActivationDistance
+    				Reference[v] = base
+    			end
+    			local nextDistance = base + Extend.Value
+    			if v.MaxActivationDistance ~= nextDistance then
+    				adjusting[v] = true
+    				v.MaxActivationDistance = nextDistance
+    				adjusting[v] = nil
+    			end
     		end))
     	end
     end
@@ -8164,8 +8182,13 @@ run(function()
     			end
     		else
     			for ent, value in Reference do
-    				ent.MaxActivationDistance = value
+    				if ent and ent.Parent then
+    					adjusting[ent] = true
+    					ent.MaxActivationDistance = value
+    					adjusting[ent] = nil
+    				end
     				Reference[ent] = nil
+    				adjusting[ent] = nil
     			end
     		end
     	end,
@@ -8176,6 +8199,19 @@ run(function()
     	Max = 10,
     	Default = 5,
     	Decimal = 10,
+        Function = function()
+            if not PromptExtender.Enabled then return end
+            for prompt, base in Reference do
+                if prompt and prompt.Parent then
+                    local desired = base + Extend.Value
+                    if prompt.MaxActivationDistance ~= desired then
+                        adjusting[prompt] = true
+                        prompt.MaxActivationDistance = desired
+                        adjusting[prompt] = nil
+                    end
+                end
+            end
+        end,
     	Suffix = function(val)
     		return val <= 1 and 'stud' or 'studs'
     	end,
@@ -9027,6 +9063,7 @@ run(function()
     end
 
     local function characterAdded(char)
+    	if not char or not char.Character or not char.Character.Parent then return end
     	if Mode.Value == 'Character' then
     		task.wait(0.1)
     		char.Character.Archivable = true
@@ -9148,20 +9185,23 @@ run(function()
     			end
     			return
     		end
-    		if data.BundleType == 'AvatarAnimations' then
+    		if data and data.BundleType == 'AvatarAnimations' and type(data.Items) == 'table' then
     			local animate = char.Character:FindFirstChild('Animate')
     			if not animate then
     				return
     			end
-    			for _, v in desc.Items do
+    			for _, v in data.Items do
     				local animtype = v.Name:split(' ')[2]:lower()
     				if animtype ~= 'animation' then
     					local suc, res = pcall(function()
     						return game:GetObjects('rbxassetid://' .. v.Id)
     					end)
-    					if suc then
-    						animate[animtype]:FindFirstChildWhichIsA('Animation').AnimationId =
-    							res[1]:FindFirstChildWhichIsA('Animation', true).AnimationId
+    			    if suc and animate[animtype] then
+    						local targetAnimation = animate[animtype]:FindFirstChildWhichIsA('Animation')
+    						local sourceAnimation = res[1] and res[1]:FindFirstChildWhichIsA('Animation', true)
+    						if targetAnimation and sourceAnimation then
+    							targetAnimation.AnimationId = sourceAnimation.AnimationId
+    						end
     					end
     				end
     			end

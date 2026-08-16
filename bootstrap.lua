@@ -135,11 +135,9 @@ local function fetch(url)
 	return nil
 end
 
--- The public bootstrap is fetched from the main branch.  A teleport reload
--- may provide the immutable release that was already installed locally; use
--- that pin so the reload cannot silently replace a newer cache with an older
--- release.  A normal first run has no pin and lets init.lua resolve `main`.
-local releaseRef = 'main'
+-- Keep the bootstrap and installer on one reviewed immutable snapshot.  The
+-- ref is advanced together with the public runtime release.
+local releaseRef = '88135d5d6d6b9e6b7fcccc23db31c7919322020d'
 if requestedReleaseRef ~= nil then
 	if type(requestedReleaseRef) ~= 'string'
 		or not requestedReleaseRef:match('^[0-9a-f]+$')
@@ -165,13 +163,10 @@ end
 
 local hasShared = type(shared) == 'table'
 local previousReleaseRef = hasShared and shared.BadVapeReleaseRef or nil
--- init.lua accepts only immutable SHA refs through BadVapeReleaseRef.  When
--- releaseRef is `main`, leave the shared value unset so init.lua performs its
--- normal branch/API resolution instead of rejecting the bootstrap call.
 if hasShared then
-	shared.BadVapeReleaseRef = releaseRef ~= 'main' and releaseRef or nil
+	shared.BadVapeReleaseRef = releaseRef
 end
-local result = table.pack(pcall(bootstrap, {Key = credential}, {requestAdapters = adapters}, requestedReleaseRef))
+local result = table.pack(pcall(bootstrap, {Key = credential}, {requestAdapters = adapters}, releaseRef))
 if hasShared then shared.BadVapeReleaseRef = previousReleaseRef end
 if not result[1] then error(result[2], 0) end
 return table.unpack(result, 2, result.n)
